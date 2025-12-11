@@ -6,6 +6,9 @@ import { Icon } from "@iconify/react";
 import Image from "next/image";
 import { Subject, SubjectStatus, getSubjects, updateSubject } from "@/lib/api/subjects";
 import { showErrorToast, showSuccessToast } from "@/lib/toast";
+import AssignSubjectToTeacherModal from "@/components/subjects/AssignSubjectToTeacherModal";
+import { moderateContent, ModerateAction } from "@/lib/api/moderate";
+import { ApiClientError } from "@/lib/api/client";
 
 type FilterStatus = "All" | SubjectStatus;
 
@@ -18,6 +21,9 @@ export default function SubjectsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [approvingSubjectId, setApprovingSubjectId] = useState<number | null>(null);
+  const [rejectingSubjectId, setRejectingSubjectId] = useState<number | null>(null);
   const pageSize = 10;
 
   const statusOptions: FilterStatus[] = [
@@ -29,19 +35,19 @@ export default function SubjectsPage() {
     "DRAFT",
   ];
 
-  useEffect(() => {
-    const fetchSubjects = async () => {
-      try {
-        setIsLoading(true);
-        const data = await getSubjects();
-        setSubjects(data);
-      } catch (error: any) {
-        showErrorToast(error.message || "Failed to load subjects. Please try again.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const fetchSubjects = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getSubjects();
+      setSubjects(data);
+    } catch (error: any) {
+      showErrorToast(error.message || "Failed to load subjects. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchSubjects();
   }, []);
 
@@ -111,14 +117,74 @@ export default function SubjectsPage() {
     });
   };
 
+  const handleAssignSubjectToTeacher = () => {
+    setIsAssignModalOpen(true);
+  };
+
+  const handleAssignSuccess = () => {
+    // Optionally refresh subjects data if needed
+    fetchSubjects();
+  };
+
+  const handleApproveSubject = async (subjectId: number) => {
+    try {
+      setApprovingSubjectId(subjectId);
+      await moderateContent({
+        model: "subject",
+        id: subjectId,
+        action: "approve",
+      });
+      showSuccessToast("Subject approved successfully!");
+      fetchSubjects();
+    } catch (error) {
+      console.error("Error approving subject:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to approve subject");
+      } else {
+        showErrorToast("An unexpected error occurred");
+      }
+    } finally {
+      setApprovingSubjectId(null);
+    }
+  };
+
+  const handleRejectSubject = async (subjectId: number) => {
+    try {
+      setRejectingSubjectId(subjectId);
+      await moderateContent({
+        model: "subject",
+        id: subjectId,
+        action: "reject",
+      });
+      showSuccessToast("Subject rejected successfully!");
+      fetchSubjects();
+    } catch (error) {
+      console.error("Error rejecting subject:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to reject subject");
+      } else {
+        showErrorToast("An unexpected error occurred");
+      }
+    } finally {
+      setRejectingSubjectId(null);
+    }
+  };
+
   return (
-    <DashboardLayout>
+    <DashboardLayout onAssignSubjectToTeacher={handleAssignSubjectToTeacher}>
       <div className="space-y-6">
         <div className="flex items-center justify-between flex-col sm:flex-row gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Subjects Management</h1>
             <p className="text-gray-600 mt-1">Review and manage all subjects</p>
           </div>
+          <button
+            onClick={handleAssignSubjectToTeacher}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white shadow hover:bg-emerald-700 transition-colors sm:hidden"
+          >
+            <Icon icon="solar:user-check-rounded-bold" className="w-5 h-5" />
+            Assign Subject to Teacher
+          </button>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
@@ -260,13 +326,53 @@ export default function SubjectsPage() {
                             {formatDate(subject.created_at)}
                           </td>
                           <td className="px-4 sm:px-6 py-4 text-right">
-                            <button
-                              onClick={() => handleViewClick(subject)}
-                              className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                            >
-                              <Icon icon="solar:eye-bold" className="w-4 h-4" />
-                              View
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              {subject.status === "PENDING" && (
+                                <>
+                                  <button
+                                    onClick={() => handleApproveSubject(subject.id)}
+                                    disabled={approvingSubjectId === subject.id || rejectingSubjectId === subject.id}
+                                    className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {approvingSubjectId === subject.id ? (
+                                      <>
+                                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                                        Approving...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
+                                        Approve
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectSubject(subject.id)}
+                                    disabled={approvingSubjectId === subject.id || rejectingSubjectId === subject.id}
+                                    className="inline-flex items-center gap-2 rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {rejectingSubjectId === subject.id ? (
+                                      <>
+                                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                                        Rejecting...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
+                                        Reject
+                                      </>
+                                    )}
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                onClick={() => handleViewClick(subject)}
+                                className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                              >
+                                <Icon icon="solar:eye-bold" className="w-4 h-4" />
+                                View
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -363,8 +469,18 @@ export default function SubjectsPage() {
         <SubjectViewModal
           subject={selectedSubject}
           onClose={closeViewModal}
+          onApprove={handleApproveSubject}
+          onReject={handleRejectSubject}
+          isApproving={approvingSubjectId === selectedSubject.id}
+          isRejecting={rejectingSubjectId === selectedSubject.id}
         />
       )}
+
+      <AssignSubjectToTeacherModal
+        isOpen={isAssignModalOpen}
+        onClose={() => setIsAssignModalOpen(false)}
+        onSuccess={handleAssignSuccess}
+      />
     </DashboardLayout>
   );
 }
@@ -372,9 +488,17 @@ export default function SubjectsPage() {
 function SubjectViewModal({
   subject,
   onClose,
+  onApprove,
+  onReject,
+  isApproving,
+  isRejecting,
 }: {
   subject: Subject;
   onClose: () => void;
+  onApprove?: (id: number) => void;
+  onReject?: (id: number) => void;
+  isApproving?: boolean;
+  isRejecting?: boolean;
 }) {
 
   const formatDateTime = (dateString: string) => {
@@ -512,6 +636,44 @@ function SubjectViewModal({
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+              {subject.status === "PENDING" && onApprove && onReject && (
+                <>
+                  <button
+                    onClick={() => onApprove(subject.id)}
+                    disabled={isApproving || isRejecting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isApproving ? (
+                      <>
+                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                        Approving...
+                      </>
+                    ) : (
+                      <>
+                        <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
+                        Approve
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => onReject(subject.id)}
+                    disabled={isApproving || isRejecting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isRejecting ? (
+                      <>
+                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                        Rejecting...
+                      </>
+                    ) : (
+                      <>
+                        <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
+                        Reject
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
               <button
                 onClick={onClose}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

@@ -72,12 +72,15 @@ export default function Sidebar({ mobileOpen = false, onClose, userName = "Admin
           </ul>
 
           <div className="mt-auto p-3 space-y-3">
-            <div className="rounded-lg bg-white border border-gray-200 shadow-sm p-4">
+            <Link
+              href="/profile"
+              className="rounded-lg bg-white border border-gray-200 shadow-sm p-4 hover:bg-gray-50 transition-colors block"
+            >
               <div className="font-semibold text-gray-900 text-sm mb-2">{userName}</div>
               <div className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
                 {userRole}
               </div>
-            </div>
+            </Link>
             <button 
               onClick={() => {
                 if (typeof window !== "undefined") {
@@ -126,12 +129,16 @@ export default function Sidebar({ mobileOpen = false, onClose, userName = "Admin
                 })}
               </ul>
               <div className="mt-auto p-3 space-y-3">
-                <div className="rounded-lg bg-white border border-gray-200 shadow-sm p-4">
+                <Link
+                  href="/profile"
+                  onClick={onClose}
+                  className="rounded-lg bg-white border border-gray-200 shadow-sm p-4 hover:bg-gray-50 transition-colors block"
+                >
                   <div className="font-semibold text-gray-900 text-sm mb-2">{userName}</div>
                   <div className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
                     {userRole}
                   </div>
-                </div>
+                </Link>
                 <button 
                   onClick={() => {
                     if (typeof window !== "undefined") {

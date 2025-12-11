@@ -5,11 +5,16 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Icon } from "@iconify/react";
 import Image from "next/image";
 import Link from "next/link";
+import { getAdminStudents, AdminStudent, approveAdminStudent, rejectAdminStudent } from "@/lib/api/students";
+import { showErrorToast, showSuccessToast } from "@/lib/toast";
+import { ApiClientError } from "@/lib/api/client";
+import AddUserModal from "@/components/users/AddUserModal";
 
-type StudentStatus = "Active" | "Inactive" | "Creator";
+type StudentStatus = "Active" | "Inactive" | "Creator" | "APPROVED" | "PENDING" | "REJECTED";
 
 type Student = {
   id: string;
+  apiId?: number;
   name: string;
   school: string;
   email: string;
@@ -19,35 +24,30 @@ type Student = {
   avatar?: string;
 };
 
-const mockStudents: Student[] = [
-  { id: "1", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Active" },
-  { id: "2", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Inactive" },
-  { id: "3", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Creator" },
-  { id: "4", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Creator" },
-  { id: "5", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Creator" },
-  { id: "6", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Creator" },
-  { id: "7", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Active" },
-  { id: "8", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Inactive" },
-  { id: "9", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Creator" },
-  { id: "10", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Active" },
-  { id: "11", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Inactive" },
-  { id: "12", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Creator" },
-  { id: "13", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Active" },
-  { id: "14", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Creator" },
-  { id: "15", name: "Bertha Jones", school: "Maplewood High School", email: "bjones566@gmail.com", linkedParent: "Mrs Katamanso", gradeLevel: "Grade 5", status: "Inactive" },
-];
+const getUniqueGrades = (students: Student[]): string[] => {
+  const gradesSet = new Set<string>(["All"]);
+  students.forEach((student) => {
+    if (student.gradeLevel) {
+      gradesSet.add(student.gradeLevel);
+    }
+  });
+  return Array.from(gradesSet).sort();
+};
 
-const grades = ["All", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12"];
-const schools = ["All", "Maplewood", "Riverside", "Central High", "Westside", "Eastside"];
+const getUniqueSchools = (students: Student[]): string[] => {
+  const schoolsSet = new Set<string>(["All"]);
+  students.forEach((student) => {
+    if (student.school) {
+      schoolsSet.add(student.school);
+    }
+  });
+  return Array.from(schoolsSet).sort();
+};
 
-type Step = 1 | 2;
-
-const gradesOptions = ["Select Grade level", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12"];
-const genders = ["Select Gender", "Male", "Female", "Other"];
-const schoolDistricts = ["Select School District", "District 1", "District 2", "District 3", "District 4"];
-const schoolsOptions = ["Mamas Day care", "Maplewood High School", "Riverside School", "Central High", "Westside School"];
 
 export default function StudentsPage() {
+  const [students, setStudents] = useState<Student[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedGrade, setSelectedGrade] = useState("All");
   const [selectedSchool, setSelectedSchool] = useState("All");
@@ -55,27 +55,126 @@ export default function StudentsPage() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [actionButtonRef, setActionButtonRef] = useState<HTMLButtonElement | null>(null);
-  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
-  const [addStudentStep, setAddStudentStep] = useState<Step>(1);
-  const [addStudentFormData, setAddStudentFormData] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    address: "",
-    dateOfBirth: "",
-    gender: "",
-    gradeLevel: "",
-    schoolDistrict: "",
-    password: "",
-    school: "",
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showSchoolDropdown, setShowSchoolDropdown] = useState(false);
-  const [schoolSearch, setSchoolSearch] = useState("");
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [addUserTab, setAddUserTab] = useState<"single" | "bulk">("single");
   const pageSize = 10;
 
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
+  const [approvingStudentId, setApprovingStudentId] = useState<string | null>(null);
+  const [rejectingStudentId, setRejectingStudentId] = useState<string | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [studentToReject, setStudentToReject] = useState<Student | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedStudentForDetails, setSelectedStudentForDetails] = useState<Student | null>(null);
+
+  const fetchStudents = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getAdminStudents();
+      // Map API data to Student type
+      const mappedStudents: Student[] = data.map((student) => ({
+        id: `${student.id}`, // Use API ID as string for React key
+        apiId: student.id, // Store the actual API ID (number) for approve/reject operations
+        name: student.name,
+        school: student.school,
+        email: student.email,
+        linkedParent: student.linked_parents || "N/A",
+        gradeLevel: student.grade,
+        status: mapStatus(student.status),
+      }));
+      setStudents(mappedStudents);
+    } catch (error) {
+      console.error("Error fetching students:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to fetch students");
+      } else {
+        showErrorToast("An unexpected error occurred while fetching students");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const mapStatus = (status: string): StudentStatus => {
+    const upperStatus = status.toUpperCase();
+    if (upperStatus === "APPROVED") {
+      return "APPROVED";
+    }
+    if (upperStatus === "PENDING") {
+      return "PENDING";
+    }
+    if (upperStatus === "REJECTED") {
+      return "REJECTED";
+    }
+    // Fallback for old status values
+    if (upperStatus === "ACTIVE" || upperStatus === "CREATOR") {
+      return "APPROVED";
+    }
+    return "PENDING";
+  };
+
+  const handleApproveStudent = async (student: Student) => {
+    if (!student.apiId) {
+      showErrorToast(`Cannot approve student: Missing student ID for ${student.name}`);
+      return;
+    }
+
+    try {
+      setApprovingStudentId(student.id);
+      await approveAdminStudent(student.apiId);
+      showSuccessToast(`${student.name} has been approved successfully!`);
+      await fetchStudents(); // Refresh the list
+    } catch (error) {
+      console.error("Error approving student:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to approve student");
+      } else {
+        showErrorToast("An unexpected error occurred while approving student");
+      }
+    } finally {
+      setApprovingStudentId(null);
+      closeModal();
+    }
+  };
+
+  const handleRejectClick = (student: Student) => {
+    setStudentToReject(student);
+    setShowRejectModal(true);
+    closeModal();
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!studentToReject || !studentToReject.apiId) {
+      showErrorToast(`Cannot reject student: Missing student ID for ${studentToReject?.name || 'unknown'}`);
+      setShowRejectModal(false);
+      setStudentToReject(null);
+      return;
+    }
+
+    try {
+      setRejectingStudentId(studentToReject.id);
+      await rejectAdminStudent(studentToReject.apiId);
+      showSuccessToast(`${studentToReject.name} has been rejected.`);
+      await fetchStudents(); // Refresh the list
+      setShowRejectModal(false);
+      setStudentToReject(null);
+    } catch (error) {
+      console.error("Error rejecting student:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to reject student");
+      } else {
+        showErrorToast("An unexpected error occurred while rejecting student");
+      }
+    } finally {
+      setRejectingStudentId(null);
+    }
+  };
+
   const filteredStudents = useMemo(() => {
-    return mockStudents.filter((student) => {
+    return students.filter((student) => {
       const matchesSearch =
         search.trim().length === 0 ||
         student.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -85,7 +184,7 @@ export default function StudentsPage() {
       const matchesSchool = selectedSchool === "All" || student.school.includes(selectedSchool);
       return matchesSearch && matchesGrade && matchesSchool;
     });
-  }, [search, selectedGrade, selectedSchool]);
+  }, [students, search, selectedGrade, selectedSchool]);
 
   const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -127,84 +226,39 @@ export default function StudentsPage() {
     }
   }, [isModalOpen, actionButtonRef]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (showSchoolDropdown && !target.closest(".school-dropdown-container")) {
-        setShowSchoolDropdown(false);
-      }
-    };
-
-    if (showSchoolDropdown) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => {
-        document.removeEventListener("mousedown", handleClickOutside);
-      };
-    }
-  }, [showSchoolDropdown]);
-
-  const handleAddStudentInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setAddStudentFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleAddStudentNext = () => {
-    if (addStudentStep === 1) {
-      setAddStudentStep(2);
-    }
-  };
-
-  const handleAddStudentBack = () => {
-    if (addStudentStep === 2) {
-      setAddStudentStep(1);
-    } else {
-      setShowAddStudentModal(false);
-      setAddStudentStep(1);
-      setAddStudentFormData({
-        name: "",
-        phone: "",
-        email: "",
-        address: "",
-        dateOfBirth: "",
-        gender: "",
-        gradeLevel: "",
-        schoolDistrict: "",
-        password: "",
-        school: "",
-      });
-    }
-  };
-
-  const handleAddStudentFinish = () => {
-    setShowAddStudentModal(false);
-    setAddStudentStep(1);
-    setAddStudentFormData({
-      name: "",
-      phone: "",
-      email: "",
-      address: "",
-      dateOfBirth: "",
-      gender: "",
-      gradeLevel: "",
-      schoolDistrict: "",
-      password: "",
-      school: "",
-    });
-  };
-
-  const filteredSchools = schoolsOptions.filter((school) =>
-    school.toLowerCase().includes(schoolSearch.toLowerCase())
-  );
 
   const getStatusBadge = (status: StudentStatus) => {
+    if (status === "APPROVED") {
+      return "bg-emerald-100 text-emerald-700";
+    }
+    if (status === "PENDING") {
+      return "bg-yellow-100 text-yellow-700";
+    }
+    if (status === "REJECTED") {
+      return "bg-red-100 text-red-700";
+    }
+    // Fallback for old status values
     if (status === "Active" || status === "Creator") {
       return "bg-emerald-100 text-emerald-700";
     }
     return "bg-gray-100 text-gray-600";
   };
 
+  const getStatusDisplay = (status: StudentStatus): string => {
+    if (status === "APPROVED") return "Approved";
+    if (status === "PENDING") return "Pending";
+    if (status === "REJECTED") return "Rejected";
+    return status;
+  };
+
+  const grades = useMemo(() => getUniqueGrades(students), [students]);
+  const schools = useMemo(() => getUniqueSchools(students), [students]);
+
   return (
-    <DashboardLayout onAddStudent={() => setShowAddStudentModal(true)}>
+    <DashboardLayout onAddStudent={() => {
+      setAddUserTab("single");
+      setShowAddUserModal(true);
+    }}>
       <div className="space-y-6">
         <div className="flex items-center justify-between flex-col sm:flex-row gap-4">
           <div>
@@ -212,14 +266,17 @@ export default function StudentsPage() {
             <p className="text-gray-600 mt-1">Manage all students</p>
           </div>
           <button
-            onClick={() => setShowAddStudentModal(true)}
+            onClick={() => {
+              setAddUserTab("single");
+              setShowAddUserModal(true);
+            }}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white shadow hover:bg-emerald-700 transition-colors sm:hidden"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"/>
               <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            Add Student
+            Add New Student
           </button>
         </div>
 
@@ -296,7 +353,16 @@ export default function StudentsPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {pagedStudents.length === 0 ? (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 sm:px-6 py-8 text-center text-gray-500">
+                      <div className="flex items-center justify-center gap-2">
+                        <Icon icon="solar:loading-bold" className="w-5 h-5 animate-spin text-emerald-600" />
+                        <span>Loading students...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : pagedStudents.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 sm:px-6 py-8 text-center text-gray-500">
                       No students found
@@ -348,7 +414,7 @@ export default function StudentsPage() {
                             student.status
                           )}`}
                         >
-                          {student.status}
+                          {getStatusDisplay(student.status)}
                         </span>
                       </td>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap relative">
@@ -363,6 +429,15 @@ export default function StudentsPage() {
                             student={selectedStudent}
                             onClose={closeModal}
                             buttonRef={actionButtonRef}
+                            onApprove={handleApproveStudent}
+                            onReject={handleRejectClick}
+                            onViewDetails={(student) => {
+                              setSelectedStudentForDetails(student);
+                              setShowDetailsModal(true);
+                              closeModal();
+                            }}
+                            isApproving={approvingStudentId === student.id}
+                            isRejecting={rejectingStudentId === student.id}
                           />
                         )}
                       </td>
@@ -435,336 +510,190 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      {showAddStudentModal && (
-        <div className="fixed right-0 top-16 bottom-0 w-full sm:w-[600px] lg:w-[700px] xl:max-w-2xl bg-white shadow-2xl overflow-y-auto animate-slide-in m-4 sm:m-6 rounded-lg z-50">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={handleAddStudentBack}
-                    className="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors"
-                  >
-                    <Icon icon="solar:arrow-left-bold" className="w-6 h-6 text-gray-700" />
-                  </button>
-                  <h1 className="text-2xl font-bold text-gray-900">Add New Student</h1>
-                </div>
-                <button
-                  onClick={handleAddStudentBack}
-                  className="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors"
-                >
-                  <Icon icon="solar:close-circle-bold" className="w-6 h-6 text-gray-700" />
-                </button>
+      {showAddUserModal && (
+        <AddUserModal
+          userType="Student"
+          activeTab={addUserTab}
+          onTabChange={setAddUserTab}
+          onClose={() => {
+            setShowAddUserModal(false);
+            setAddUserTab("single");
+          }}
+          onSuccess={() => {
+            fetchStudents();
+          }}
+        />
+      )}
+
+      {showDetailsModal && selectedStudentForDetails && (
+        <StudentDetailsModal
+          student={selectedStudentForDetails}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedStudentForDetails(null);
+          }}
+        />
+      )}
+
+      {showRejectModal && studentToReject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => {
+            setShowRejectModal(false);
+            setStudentToReject(null);
+          }} />
+          <div className="relative z-50 bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <Icon icon="solar:danger-triangle-bold" className="w-6 h-6 text-red-600" />
               </div>
-
-              <div className="flex items-center gap-4 mb-8">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
-                      addStudentStep === 1
-                        ? "bg-emerald-600 text-white"
-                        : "bg-gray-200 text-gray-600"
-                    }`}
-                  >
-                    1
-                  </div>
-                  <span
-                    className={`font-medium ${
-                      addStudentStep === 1 ? "text-emerald-600" : "text-gray-600"
-                    }`}
-                  >
-                    Personal Details
-                  </span>
-                </div>
-                <div className="flex-1 h-0.5 bg-gray-200"></div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
-                      addStudentStep === 2
-                        ? "bg-emerald-600 text-white"
-                        : "bg-gray-200 text-gray-600"
-                    }`}
-                  >
-                    2
-                  </div>
-                  <span
-                    className={`font-medium ${
-                      addStudentStep === 2 ? "text-emerald-600" : "text-gray-600"
-                    }`}
-                  >
-                    Enrollment Details
-                  </span>
-                </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Reject Student</h3>
+                <p className="text-sm text-gray-600 mt-1">This action cannot be undone</p>
               </div>
-
-              {addStudentStep === 1 && (
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={addStudentFormData.name}
-                      onChange={handleAddStudentInputChange}
-                      placeholder="Enter student name"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Phone
-                    </label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={addStudentFormData.phone}
-                      onChange={handleAddStudentInputChange}
-                      placeholder="Enter phone number"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email <span className="text-gray-500">(Optional)</span>
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={addStudentFormData.email}
-                      onChange={handleAddStudentInputChange}
-                      placeholder="Enter email address"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Student Address
-                    </label>
-                    <input
-                      type="text"
-                      name="address"
-                      value={addStudentFormData.address}
-                      onChange={handleAddStudentInputChange}
-                      placeholder="Enter student address"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date of Birth
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        name="dateOfBirth"
-                        value={addStudentFormData.dateOfBirth}
-                        onChange={handleAddStudentInputChange}
-                        placeholder="DD/MM/YYYY"
-                        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white"
-                      />
-                      <Icon
-                        icon="solar:calendar-bold"
-                        className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select Gender
-                    </label>
-                    <div className="relative">
-                      <select
-                        name="gender"
-                        value={addStudentFormData.gender}
-                        onChange={handleAddStudentInputChange}
-                        className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white appearance-none"
-                      >
-                        {genders.map((gender) => (
-                          <option key={gender} value={gender === "Select Gender" ? "" : gender}>
-                            {gender}
-                          </option>
-                        ))}
-                      </select>
-                      <Icon
-                        icon="solar:alt-arrow-down-bold"
-                        className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {addStudentStep === 2 && (
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Grade Level
-                    </label>
-                    <div className="relative">
-                      <select
-                        name="gradeLevel"
-                        value={addStudentFormData.gradeLevel}
-                        onChange={handleAddStudentInputChange}
-                        className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white appearance-none"
-                      >
-                        {gradesOptions.map((grade) => (
-                          <option key={grade} value={grade === "Select Grade level" ? "" : grade}>
-                            {grade}
-                          </option>
-                        ))}
-                      </select>
-                      <Icon
-                        icon="solar:alt-arrow-down-bold"
-                        className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      School District
-                    </label>
-                    <div className="relative">
-                      <select
-                        name="schoolDistrict"
-                        value={addStudentFormData.schoolDistrict}
-                        onChange={handleAddStudentInputChange}
-                        className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white appearance-none"
-                      >
-                        {schoolDistricts.map((district) => (
-                          <option key={district} value={district === "Select School District" ? "" : district}>
-                            {district}
-                          </option>
-                        ))}
-                      </select>
-                      <Icon
-                        icon="solar:alt-arrow-down-bold"
-                        className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        name="password"
-                        value={addStudentFormData.password}
-                        onChange={handleAddStudentInputChange}
-                        placeholder="Password"
-                        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2"
-                      >
-                        <Icon
-                          icon={showPassword ? "solar:eye-closed-bold" : "solar:eye-bold"}
-                          className="w-5 h-5 text-gray-400"
-                        />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      School
-                    </label>
-                    <div className="relative school-dropdown-container">
-                      <button
-                        type="button"
-                        onClick={() => setShowSchoolDropdown(!showSchoolDropdown)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-left text-gray-900 bg-white flex items-center justify-between"
-                      >
-                        <span className={addStudentFormData.school ? "text-gray-900" : "text-gray-500"}>
-                          {addStudentFormData.school || "Select School"}
-                        </span>
-                        <Icon
-                          icon="solar:alt-arrow-down-bold"
-                          className={`w-5 h-5 text-gray-400 transition-transform ${showSchoolDropdown ? "rotate-180" : ""}`}
-                        />
-                      </button>
-                      {showSchoolDropdown && (
-                        <div className="absolute z-10 w-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-hidden">
-                          <div className="p-3 border-b border-gray-200">
-                            <div className="relative">
-                              <Icon
-                                icon="solar:magnifer-bold"
-                                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-                              />
-                              <input
-                                type="text"
-                                placeholder="Search For Topic"
-                                value={schoolSearch}
-                                onChange={(e) => setSchoolSearch(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-gray-900 bg-white"
-                              />
-                            </div>
-                          </div>
-                          <div className="max-h-48 overflow-y-auto">
-                            {filteredSchools.length === 0 ? (
-                              <div className="px-4 py-3 text-sm text-gray-500 text-center">No schools found</div>
-                            ) : (
-                              filteredSchools.map((school, index) => (
-                                <button
-                                  key={index}
-                                  type="button"
-                                  onClick={() => {
-                                    setAddStudentFormData((prev) => ({ ...prev, school }));
-                                    setShowSchoolDropdown(false);
-                                    setSchoolSearch("");
-                                  }}
-                                  className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                                >
-                                  {school}
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between gap-4 mt-8 pt-6 border-t border-gray-200">
-                <button
-                  onClick={handleAddStudentBack}
-                  className="px-6 py-3 rounded-lg bg-emerald-50 text-emerald-700 font-semibold hover:bg-emerald-100 transition-colors"
-                >
-                  Back
-                </button>
-                {addStudentStep === 1 ? (
-                  <button
-                    onClick={handleAddStudentNext}
-                    className="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors"
-                  >
-                    Next
-                  </button>
+            </div>
+            <p className="text-gray-700 mb-6">
+              Are you sure you want to reject <span className="font-semibold">{studentToReject.name}</span>? 
+              This will mark the student as rejected and they will not be able to access the platform.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setStudentToReject(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRejectConfirm}
+                disabled={rejectingStudentId === studentToReject.id}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {rejectingStudentId === studentToReject.id ? (
+                  <>
+                    <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                    Rejecting...
+                  </>
                 ) : (
-                  <button
-                    onClick={handleAddStudentFinish}
-                    className="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors"
-                  >
-                    Finish
-                  </button>
+                  <>
+                    <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
+                    Reject Student
+                  </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </DashboardLayout>
+  );
+}
+
+function StudentDetailsModal({
+  student,
+  onClose,
+}: {
+  student: Student;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="bg-black/50 backdrop-blur-sm fixed inset-0" onClick={onClose} />
+      <div className="relative z-50 bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-gray-200" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Student Details</h2>
+              <p className="text-sm text-gray-600 mt-1">Complete information about {student.name}</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <Icon icon="solar:close-circle-bold" className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Profile Section */}
+          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-6 border border-emerald-200">
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 bg-emerald-200 rounded-full flex items-center justify-center">
+                <Icon icon="solar:user-bold" className="w-10 h-10 text-emerald-700" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-gray-900">{student.name}</h3>
+                <p className="text-sm text-gray-600 mt-1">{student.email}</p>
+                <div className="mt-2">
+                  <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
+                    student.status === "APPROVED"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : student.status === "PENDING"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : "bg-red-100 text-red-800"
+                  }`}>
+                    {student.status}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-      )}
-    </DashboardLayout>
+
+          {/* Student Information */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Icon icon="solar:user-id-bold" className="w-5 h-5 text-emerald-600" />
+              Student Information
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Student ID</p>
+                <p className="text-sm font-semibold text-gray-900">#{student.apiId || student.id}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Email Address</p>
+                <p className="text-sm font-semibold text-gray-900">{student.email}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">School</p>
+                <p className="text-sm font-semibold text-gray-900">{student.school}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Grade Level</p>
+                <p className="text-sm font-semibold text-gray-900">{student.gradeLevel}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Linked Parents</p>
+                <p className="text-sm font-semibold text-gray-900">{student.linkedParent}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Status</p>
+                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                  student.status === "APPROVED"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : student.status === "PENDING"
+                    ? "bg-yellow-100 text-yellow-800"
+                    : "bg-red-100 text-red-800"
+                }`}>
+                  {student.status}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -772,10 +701,20 @@ function StudentActionDropdown({
   student,
   onClose,
   buttonRef,
+  onApprove,
+  onReject,
+  onViewDetails,
+  isApproving,
+  isRejecting,
 }: {
   student: Student;
   onClose: () => void;
   buttonRef: HTMLButtonElement;
+  onApprove: (student: Student) => void;
+  onReject: (student: Student) => void;
+  onViewDetails: (student: Student) => void;
+  isApproving: boolean;
+  isRejecting: boolean;
 }) {
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
@@ -820,33 +759,60 @@ function StudentActionDropdown({
           <p className="text-xs text-gray-500 truncate">{student.email}</p>
         </div>
         <div className="py-1">
+          {student.status === "PENDING" && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onApprove(student);
+                }}
+                disabled={isApproving || isRejecting}
+                className="w-full text-left px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50 flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isApproving ? (
+                  <>
+                    <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin text-emerald-600" />
+                    <span>Approving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon icon="solar:check-circle-bold" className="w-4 h-4 text-emerald-600" />
+                    <span>Approve Student</span>
+                  </>
+                )}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReject(student);
+                }}
+                disabled={isApproving || isRejecting}
+                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isRejecting ? (
+                  <>
+                    <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin text-red-600" />
+                    <span>Rejecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon icon="solar:close-circle-bold" className="w-4 h-4 text-red-600" />
+                    <span>Reject Student</span>
+                  </>
+                )}
+              </button>
+              <div className="border-t border-gray-200 my-1"></div>
+            </>
+          )}
           <button
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewDetails(student);
+            }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
           >
             <Icon icon="solar:eye-bold" className="w-4 h-4 text-gray-600" />
             <span>View Details</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-          >
-            <Icon icon="solar:pen-bold" className="w-4 h-4 text-gray-600" />
-            <span>Edit Student</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-          >
-            <Icon icon="solar:lock-password-bold" className="w-4 h-4 text-gray-600" />
-            <span>Reset Password</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
-          >
-            <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
-            <span>Delete Student</span>
           </button>
         </div>
       </div>

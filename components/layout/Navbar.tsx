@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import React from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Icon } from "@iconify/react";
 
@@ -17,10 +17,12 @@ type NavbarProps = {
   onAddSchool?: () => void;
   onAddCounty?: () => void;
   onAddDistrict?: () => void;
+  onAssignSubjectToTeacher?: () => void;
 };
 
-export default function Navbar({ rightContent, onMenuClick, userRole, onAddStudent, onAddTeacher, onAddParent, onLinkStudent, onAddSchool, onAddCounty, onAddDistrict }: NavbarProps) {
+export default function Navbar({ rightContent, onMenuClick, userRole, onAddStudent, onAddTeacher, onAddParent, onLinkStudent, onAddSchool, onAddCounty, onAddDistrict, onAssignSubjectToTeacher }: NavbarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   
   const showAddUserButton = pathname?.startsWith("/users");
   const showContentManagerButtons = pathname?.startsWith("/content-managers");
@@ -30,6 +32,30 @@ export default function Navbar({ rightContent, onMenuClick, userRole, onAddStude
   const showAddSchoolButton = pathname?.startsWith("/schools");
   const showAddCountyButton = pathname?.startsWith("/county");
   const showAddDistrictButton = pathname?.startsWith("/district");
+  const showAssignSubjectButton = pathname?.startsWith("/subjects");
+
+  // Get the selected tab from URL for users page
+  const usersTab = showAddUserButton ? searchParams?.get("tab") : null;
+  
+  const getAddUserButtonText = (): string => {
+    if (!usersTab || usersTab === "All") return "Add New User";
+    switch (usersTab) {
+      case "Students":
+        return "Add New Student";
+      case "Teachers":
+        return "Add New Teacher";
+      case "Content Managers":
+        return "Add New Content Manager";
+      default:
+        return "Add New User";
+    }
+  };
+
+  const canCreateUser = (): boolean => {
+    return usersTab === "All" || usersTab === "Students" || usersTab === "Teachers" || usersTab === "Content Managers";
+  };
+
+  const shouldShowAddUserButton = showAddUserButton && canCreateUser();
 
   const currentTitle = React.useMemo(() => {
     if (!pathname) return "";
@@ -42,6 +68,7 @@ export default function Navbar({ rightContent, onMenuClick, userRole, onAddStude
     if (pathname.startsWith("/schools")) return "Schools Management";
     if (pathname.startsWith("/county")) return "County";
     if (pathname.startsWith("/district")) return "District Management";
+    if (pathname.startsWith("/subjects")) return "Subjects Management";
     if (pathname.startsWith("/report")) return "Report";
     return "";
   }, [pathname]);
@@ -78,17 +105,30 @@ export default function Navbar({ rightContent, onMenuClick, userRole, onAddStude
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
-          {showAddUserButton && (
-            <Link
-              href="/users/create"
+          {shouldShowAddUserButton && (
+            <button
+              onClick={() => {
+                if (usersTab === "All" || !usersTab) {
+                  window.dispatchEvent(new CustomEvent("openUserTypeModal"));
+                } else {
+                  const typeMap: Record<string, "Student" | "Teacher" | "Content Manager"> = {
+                    "Students": "Student",
+                    "Teachers": "Teacher",
+                    "Content Managers": "Content Manager"
+                  };
+                  window.dispatchEvent(new CustomEvent("openAddUserModal", { 
+                    detail: { type: typeMap[usersTab] || "Student", tab: "single" }
+                  }));
+                }
+              }}
               className="hidden sm:inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white shadow hover:bg-emerald-700 transition-colors"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"/>
                 <line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
-              Add New User
-            </Link>
+              {getAddUserButtonText()}
+            </button>
           )}
           {showContentManagerButtons && (
             <>
@@ -181,6 +221,15 @@ export default function Navbar({ rightContent, onMenuClick, userRole, onAddStude
             >
               <Icon icon="solar:add-circle-bold" className="w-5 h-5" />
               Add District
+            </button>
+          )}
+          {showAssignSubjectButton && onAssignSubjectToTeacher && (
+            <button
+              onClick={onAssignSubjectToTeacher}
+              className="hidden sm:inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white shadow hover:bg-emerald-700 transition-colors"
+            >
+              <Icon icon="solar:user-check-rounded-bold" className="w-5 h-5" />
+              Assign Subject to Teacher
             </button>
           )}
           <button

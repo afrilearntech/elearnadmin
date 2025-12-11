@@ -12,7 +12,9 @@ import {
   getSubject,
   getTopic,
 } from "@/lib/api/lessons";
-import { showErrorToast } from "@/lib/toast";
+import { showErrorToast, showSuccessToast } from "@/lib/toast";
+import { moderateContent } from "@/lib/api/moderate";
+import { ApiClientError } from "@/lib/api/client";
 
 type FilterStatus = "All" | LessonStatus;
 
@@ -27,6 +29,8 @@ export default function LessonsPage() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [subjectNames, setSubjectNames] = useState<Record<number, string>>({});
   const [topicNames, setTopicNames] = useState<Record<number, string>>({});
+  const [approvingLessonId, setApprovingLessonId] = useState<number | null>(null);
+  const [rejectingLessonId, setRejectingLessonId] = useState<number | null>(null);
   const pageSize = 10;
 
   const statusOptions: FilterStatus[] = [
@@ -39,18 +43,6 @@ export default function LessonsPage() {
   ];
 
   useEffect(() => {
-    const fetchLessons = async () => {
-      try {
-        setIsLoading(true);
-        const data = await getLessons();
-        setLessons(data);
-      } catch (error: any) {
-        showErrorToast(error.message || "Failed to load lessons. Please try again.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchLessons();
   }, []);
 
@@ -181,6 +173,62 @@ export default function LessonsPage() {
 
   const getSubjectName = (id: number) => subjectNames[id] || `Subject ${id}`;
   const getTopicName = (id: number) => topicNames[id] || `Topic ${id}`;
+
+  const fetchLessons = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getLessons();
+      setLessons(data);
+    } catch (error: any) {
+      showErrorToast(error.message || "Failed to load lessons. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleApproveLesson = async (lessonId: number) => {
+    try {
+      setApprovingLessonId(lessonId);
+      await moderateContent({
+        model: "lesson",
+        id: lessonId,
+        action: "approve",
+      });
+      showSuccessToast("Lesson approved successfully!");
+      fetchLessons();
+    } catch (error) {
+      console.error("Error approving lesson:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to approve lesson");
+      } else {
+        showErrorToast("An unexpected error occurred");
+      }
+    } finally {
+      setApprovingLessonId(null);
+    }
+  };
+
+  const handleRejectLesson = async (lessonId: number) => {
+    try {
+      setRejectingLessonId(lessonId);
+      await moderateContent({
+        model: "lesson",
+        id: lessonId,
+        action: "reject",
+      });
+      showSuccessToast("Lesson rejected successfully!");
+      fetchLessons();
+    } catch (error) {
+      console.error("Error rejecting lesson:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to reject lesson");
+      } else {
+        showErrorToast("An unexpected error occurred");
+      }
+    } finally {
+      setRejectingLessonId(null);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -349,13 +397,53 @@ export default function LessonsPage() {
                             {formatDate(lesson.created_at)}
                           </td>
                           <td className="px-4 sm:px-6 py-4 text-right">
-                            <button
-                              onClick={() => handleViewClick(lesson)}
-                              className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                            >
-                              <Icon icon="solar:eye-bold" className="w-4 h-4" />
-                              View
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              {lesson.status === "PENDING" && (
+                                <>
+                                  <button
+                                    onClick={() => handleApproveLesson(lesson.id)}
+                                    disabled={approvingLessonId === lesson.id || rejectingLessonId === lesson.id}
+                                    className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {approvingLessonId === lesson.id ? (
+                                      <>
+                                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                                        Approving...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
+                                        Approve
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectLesson(lesson.id)}
+                                    disabled={approvingLessonId === lesson.id || rejectingLessonId === lesson.id}
+                                    className="inline-flex items-center gap-2 rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {rejectingLessonId === lesson.id ? (
+                                      <>
+                                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                                        Rejecting...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
+                                        Reject
+                                      </>
+                                    )}
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                onClick={() => handleViewClick(lesson)}
+                                className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                              >
+                                <Icon icon="solar:eye-bold" className="w-4 h-4" />
+                                View
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -454,6 +542,10 @@ export default function LessonsPage() {
           subjectName={getSubjectName(selectedLesson.subject)}
           topicName={getTopicName(selectedLesson.topic)}
           onClose={closeViewModal}
+          onApprove={handleApproveLesson}
+          onReject={handleRejectLesson}
+          isApproving={approvingLessonId === selectedLesson.id}
+          isRejecting={rejectingLessonId === selectedLesson.id}
         />
       )}
     </DashboardLayout>
@@ -465,11 +557,19 @@ function LessonViewModal({
   subjectName,
   topicName,
   onClose,
+  onApprove,
+  onReject,
+  isApproving,
+  isRejecting,
 }: {
   lesson: Lesson;
   subjectName: string;
   topicName: string;
   onClose: () => void;
+  onApprove?: (id: number) => void;
+  onReject?: (id: number) => void;
+  isApproving?: boolean;
+  isRejecting?: boolean;
 }) {
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -646,6 +746,44 @@ function LessonViewModal({
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+              {lesson.status === "PENDING" && onApprove && onReject && (
+                <>
+                  <button
+                    onClick={() => onApprove(lesson.id)}
+                    disabled={isApproving || isRejecting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isApproving ? (
+                      <>
+                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                        Approving...
+                      </>
+                    ) : (
+                      <>
+                        <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
+                        Approve
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => onReject(lesson.id)}
+                    disabled={isApproving || isRejecting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isRejecting ? (
+                      <>
+                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                        Rejecting...
+                      </>
+                    ) : (
+                      <>
+                        <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
+                        Reject
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
               <button
                 onClick={onClose}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"

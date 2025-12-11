@@ -4,6 +4,9 @@ import React, { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Icon } from "@iconify/react";
 import Image from "next/image";
+import { getAdminParents, AdminParent } from "@/lib/api/users";
+import { showErrorToast } from "@/lib/toast";
+import { ApiClientError } from "@/lib/api/client";
 
 type ParentStatus = "ACTIVE" | "INACTIVE" | "PENDING";
 
@@ -18,28 +21,19 @@ type Parent = {
   avatar?: string;
 };
 
-const mockParents: Parent[] = [
-  { id: "1", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 1" },
-  { id: "2", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 2" },
-  { id: "3", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 1" },
-  { id: "4", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 3" },
-  { id: "5", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 2" },
-  { id: "6", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 4" },
-  { id: "7", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 1" },
-  { id: "8", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 2" },
-  { id: "9", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 3" },
-  { id: "10", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 1" },
-  { id: "11", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 4" },
-  { id: "12", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 2" },
-  { id: "13", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 3" },
-  { id: "14", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 1" },
-  { id: "15", name: "Kristin Akua Watson", email: "bjones566@gmail.com", linkedStudents: 2, dateJoined: "January 12, 2021", status: "ACTIVE", district: "District 4" },
-];
-
-const statusOptions = ["All", "ACTIVE", "INACTIVE", "PENDING"];
-const districts = ["All", "District 1", "District 2", "District 3", "District 4"];
+const getUniqueStatuses = (parents: Parent[]): string[] => {
+  const statusSet = new Set<string>(["All"]);
+  parents.forEach((parent) => {
+    if (parent.status) {
+      statusSet.add(parent.status);
+    }
+  });
+  return Array.from(statusSet).sort();
+};
 
 export default function ParentsPage() {
+  const [parents, setParents] = useState<Parent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("All");
   const [selectedDistrict, setSelectedDistrict] = useState("All");
@@ -47,19 +41,68 @@ export default function ParentsPage() {
   const [selectedParent, setSelectedParent] = useState<Parent | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [actionButtonRef, setActionButtonRef] = useState<HTMLButtonElement | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedParentForDetails, setSelectedParentForDetails] = useState<Parent | null>(null);
   const pageSize = 10;
 
+  useEffect(() => {
+    fetchParents();
+  }, []);
+
+  const fetchParents = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getAdminParents();
+      const mappedParents: Parent[] = data.map((parent, index) => ({
+        id: `parent-${index}`, 
+        name: parent.name,
+        email: parent.email,
+        linkedStudents: parent.linked_students ? parseInt(parent.linked_students) || 0 : 0,
+        dateJoined: new Date(parent.date_joined).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        status: mapStatus(parent.status),
+        avatar: undefined,
+      }));
+      setParents(mappedParents);
+    } catch (error) {
+      console.error("Error fetching parents:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to fetch parents");
+      } else {
+        showErrorToast("An unexpected error occurred while fetching parents");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const mapStatus = (status: string): ParentStatus => {
+    const upperStatus = status.toUpperCase();
+    if (upperStatus === "ACTIVE") {
+      return "ACTIVE";
+    }
+    if (upperStatus === "PENDING") {
+      return "PENDING";
+    }
+    return "INACTIVE";
+  };
+
   const filteredParents = useMemo(() => {
-    return mockParents.filter((parent) => {
+    return parents.filter((parent) => {
       const matchesSearch =
         search.trim().length === 0 ||
         parent.name.toLowerCase().includes(search.toLowerCase()) ||
         parent.email.toLowerCase().includes(search.toLowerCase());
       const matchesStatus = selectedStatus === "All" || parent.status === selectedStatus;
-      const matchesDistrict = selectedDistrict === "All" || (parent.district && parent.district === selectedDistrict);
+      const matchesDistrict = selectedDistrict === "All"; // District filtering removed since API doesn't provide it
       return matchesSearch && matchesStatus && matchesDistrict;
     });
-  }, [search, selectedStatus, selectedDistrict]);
+  }, [parents, search, selectedStatus, selectedDistrict]);
+
+  const statusOptions = useMemo(() => getUniqueStatuses(parents), [parents]);
 
   const totalPages = Math.max(1, Math.ceil(filteredParents.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -120,28 +163,12 @@ export default function ParentsPage() {
   };
 
   return (
-    <DashboardLayout onAddParent={() => console.log("Add Parent")} onLinkStudent={() => console.log("Link Student")}>
+    <DashboardLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between flex-col sm:flex-row gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Parents Management</h1>
             <p className="text-gray-600 mt-1">Manage all parents</p>
-          </div>
-          <div className="flex gap-3 w-full sm:w-auto">
-            <button
-              onClick={() => console.log("Link Student")}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-white shadow hover:bg-emerald-600 transition-colors sm:hidden"
-            >
-              <Icon icon="solar:link-bold" className="w-5 h-5" />
-              Link Student
-            </button>
-            <button
-              onClick={() => console.log("Add Parent")}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white shadow hover:bg-emerald-700 transition-colors sm:hidden"
-            >
-              <Icon icon="solar:add-circle-bold" className="w-5 h-5" />
-              Add Parent
-            </button>
           </div>
         </div>
 
@@ -180,27 +207,17 @@ export default function ParentsPage() {
                   className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none"
                 />
               </div>
-              <div className="relative sm:w-48">
-                <select
-                  value={selectedDistrict}
-                  onChange={(e) => setSelectedDistrict(e.target.value)}
-                  className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white appearance-none cursor-pointer"
-                >
-                  {districts.map((district) => (
-                    <option key={district} value={district}>
-                      {district === "All" ? "All Districts" : district}
-                    </option>
-                  ))}
-                </select>
-                <Icon
-                  icon="solar:alt-arrow-down-bold"
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none"
-                />
-              </div>
             </div>
           </div>
 
-          {filteredParents.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="flex items-center justify-center gap-2">
+                <Icon icon="solar:loading-bold" className="w-5 h-5 animate-spin text-emerald-600" />
+                <span className="text-gray-500">Loading parents...</span>
+              </div>
+            </div>
+          ) : filteredParents.length === 0 ? (
             <div className="text-center py-12">
               <Icon icon="solar:users-group-two-rounded-bold-duotone" className="w-12 h-12 text-gray-400 mx-auto mb-3" />
               <p className="text-gray-500 text-sm">No parents found</p>
@@ -250,7 +267,11 @@ export default function ParentsPage() {
                             <div className="text-sm text-gray-600 truncate max-w-[200px]">{parent.email}</div>
                           </td>
                           <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600 hidden md:table-cell">
-                            {parent.linkedStudents} Student{parent.linkedStudents !== 1 ? "s" : ""}
+                            {parent.linkedStudents > 0 ? (
+                              `${parent.linkedStudents} Student${parent.linkedStudents !== 1 ? "s" : ""}`
+                            ) : (
+                              <span className="text-gray-400">No students linked</span>
+                            )}
                           </td>
                           <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600 hidden lg:table-cell">
                             {parent.dateJoined}
@@ -353,9 +374,133 @@ export default function ParentsPage() {
           parent={selectedParent}
           onClose={closeModal}
           buttonRef={actionButtonRef}
+          onViewDetails={(parent) => {
+            setSelectedParentForDetails(parent);
+            setShowDetailsModal(true);
+            closeModal();
+          }}
+        />
+      )}
+
+      {showDetailsModal && selectedParentForDetails && (
+        <ParentDetailsModal
+          parent={selectedParentForDetails}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedParentForDetails(null);
+          }}
         />
       )}
     </DashboardLayout>
+  );
+}
+
+function ParentDetailsModal({
+  parent,
+  onClose,
+}: {
+  parent: Parent;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="bg-black/50 backdrop-blur-sm fixed inset-0" onClick={onClose} />
+      <div className="relative z-50 bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-gray-200" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Parent Details</h2>
+              <p className="text-sm text-gray-600 mt-1">Complete information about {parent.name}</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <Icon icon="solar:close-circle-bold" className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Profile Section */}
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 bg-purple-200 rounded-full flex items-center justify-center">
+                <Icon icon="solar:user-bold" className="w-10 h-10 text-purple-700" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-gray-900">{parent.name}</h3>
+                <p className="text-sm text-gray-600 mt-1">{parent.email}</p>
+                <div className="mt-2">
+                  <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
+                    parent.status === "ACTIVE"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : parent.status === "PENDING"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : "bg-gray-100 text-gray-800"
+                  }`}>
+                    {parent.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Parent Information */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Icon icon="solar:user-id-bold" className="w-5 h-5 text-purple-600" />
+              Parent Information
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Parent ID</p>
+                <p className="text-sm font-semibold text-gray-900">#{parent.id}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Email Address</p>
+                <p className="text-sm font-semibold text-gray-900">{parent.email}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Linked Students</p>
+                <p className="text-sm font-semibold text-gray-900">{parent.linkedStudents}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Date Joined</p>
+                <p className="text-sm font-semibold text-gray-900">{parent.dateJoined}</p>
+              </div>
+              {parent.district && (
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <p className="text-xs font-medium text-gray-600 mb-1">District</p>
+                  <p className="text-sm font-semibold text-gray-900">{parent.district}</p>
+                </div>
+              )}
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Status</p>
+                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                  parent.status === "ACTIVE"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : parent.status === "PENDING"
+                    ? "bg-yellow-100 text-yellow-800"
+                    : "bg-gray-100 text-gray-800"
+                }`}>
+                  {parent.status}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -363,10 +508,12 @@ function ParentActionDropdown({
   parent,
   onClose,
   buttonRef,
+  onViewDetails,
 }: {
   parent: Parent;
   onClose: () => void;
   buttonRef: HTMLButtonElement;
+  onViewDetails: (parent: Parent) => void;
 }) {
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
@@ -422,39 +569,14 @@ function ParentActionDropdown({
         </div>
         <div className="py-1">
           <button
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewDetails(parent);
+            }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
           >
             <Icon icon="solar:eye-bold" className="w-4 h-4 text-gray-600" />
             <span>View Details</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-          >
-            <Icon icon="solar:pen-bold" className="w-4 h-4 text-gray-600" />
-            <span>Edit Parent</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-          >
-            <Icon icon="solar:link-bold" className="w-4 h-4 text-gray-600" />
-            <span>Link Student</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-          >
-            <Icon icon="solar:lock-password-bold" className="w-4 h-4 text-gray-600" />
-            <span>Reset Password</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
-          >
-            <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
-            <span>Delete Parent</span>
           </button>
         </div>
       </div>

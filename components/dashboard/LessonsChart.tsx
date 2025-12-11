@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   BarChart,
   Bar,
@@ -12,45 +12,63 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const data = [
-  { month: "Jan", submitted: 450000, approved: 380000, rejected: 70000 },
-  { month: "Feb", submitted: 420000, approved: 350000, rejected: 70000 },
-  { month: "Mar", submitted: 480000, approved: 400000, rejected: 80000 },
-  { month: "Apr", submitted: 460000, approved: 390000, rejected: 70000 },
-  { month: "May", submitted: 440000, approved: 370000, rejected: 70000 },
-  { month: "Jun", submitted: 500000, approved: 420000, rejected: 80000 },
-  { month: "Jul", submitted: 470000, approved: 400000, rejected: 70000 },
-  { month: "Aug", submitted: 490000, approved: 410000, rejected: 80000 },
-  { month: "Sep", submitted: 450000, approved: 380000, rejected: 70000 },
-  { month: "Oct", submitted: 480000, approved: 400000, rejected: 80000 },
-  { month: "Nov", submitted: 460000, approved: 390000, rejected: 70000 },
-  { month: "Dec", submitted: 500000, approved: 420000, rejected: 80000 },
-];
+interface LessonsChartPoint {
+  period: string;
+  submitted: number;
+  approved: number;
+  rejected: number;
+}
+
+interface LessonsChartProps {
+  data: LessonsChartPoint[];
+  granularity?: string;
+}
 
 type TimeFilter = "Day" | "Month" | "Year";
 
-export default function LessonsChart() {
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>("Month");
+export default function LessonsChart({ data, granularity = "month" }: LessonsChartProps) {
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>(
+    granularity === "day" ? "Day" : granularity === "year" ? "Year" : "Month"
+  );
+
+  const chartData = useMemo(() => {
+    return data.map((point) => ({
+      month: point.period,
+      submitted: point.submitted,
+      approved: point.approved,
+      rejected: point.rejected,
+    }));
+  }, [data]);
 
   return (
     <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold text-gray-900">Lessons</h2>
-        <div className="flex gap-2">
-          {(["Day", "Month", "Year"] as TimeFilter[]).map((filter) => (
-            <button
-              key={filter}
-              onClick={() => setTimeFilter(filter)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                timeFilter === filter
-                  ? "bg-[#059669] text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
+        {granularity && (
+          <div className="flex gap-2">
+            {(["Day", "Month", "Year"] as TimeFilter[]).map((filter) => {
+              const isActive = 
+                (granularity === "day" && filter === "Day") ||
+                (granularity === "month" && filter === "Month") ||
+                (granularity === "year" && filter === "Year");
+              
+              return (
+                <button
+                  key={filter}
+                  onClick={() => setTimeFilter(filter)}
+                  disabled={!isActive}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-[#059669] text-white"
+                      : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {filter}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-4 mb-4">
@@ -68,8 +86,13 @@ export default function LessonsChart() {
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={400}>
-        <BarChart data={data}>
+      {chartData.length === 0 ? (
+        <div className="flex items-center justify-center h-[400px] text-gray-500">
+          <p className="text-sm">No chart data available</p>
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={400}>
+          <BarChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
           <XAxis
             dataKey="month"
@@ -115,8 +138,9 @@ export default function LessonsChart() {
             radius={[4, 4, 0, 0]}
             name="Rejected"
           />
-        </BarChart>
-      </ResponsiveContainer>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }

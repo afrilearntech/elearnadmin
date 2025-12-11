@@ -1,56 +1,46 @@
 "use client";
 
-interface Learner {
-  initials: string;
+interface HighLearner {
+  student_id: number;
   name: string;
-  achievement: string;
+  subtitle: string;
 }
 
-const learners: Learner[] = [
-  {
-    initials: "BJ",
-    name: "Bertha Jones",
-    achievement: "Completed 8 quizzes this week",
-  },
-  {
-    initials: "PS",
-    name: "Prince Samuel",
-    achievement: "Achieved 95% in maths subject",
-  },
-  {
-    initials: "JO",
-    name: "Josephine Osei",
-    achievement: "Top Score in Science Project",
-  },
-  {
-    initials: "SO",
-    name: "Sarah Opoku",
-    achievement: 'Finished "History of Art" Course',
-  },
-  {
-    initials: "MJ",
-    name: "MaryAnn Jones",
-    achievement: "Completed 8 quizzes this week",
-  },
-];
+interface HighLearnersProps {
+  learners: HighLearner[];
+}
 
-export default function HighLearners() {
+export default function HighLearners({ learners }: HighLearnersProps) {
+  const getInitials = (name: string) => {
+    const parts = name.split(" ");
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
   return (
     <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
       <h2 className="text-lg font-semibold text-gray-900 mb-4">High Learners</h2>
-      <div className="space-y-4">
-        {learners.map((learner, index) => (
-          <div key={index} className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#059669] to-[#1E40AF] flex items-center justify-center text-white font-semibold">
-              {learner.initials}
+      {learners.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          <p className="text-sm">No high learners data available</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {learners.map((learner) => (
+            <div key={learner.student_id} className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#059669] to-[#1E40AF] flex items-center justify-center text-white font-semibold">
+                {getInitials(learner.name)}
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-gray-900">{learner.name}</p>
+                <p className="text-sm text-gray-600">{learner.subtitle}</p>
+              </div>
             </div>
-            <div className="flex-1">
-              <p className="font-semibold text-gray-900">{learner.name}</p>
-              <p className="text-sm text-gray-600">{learner.achievement}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

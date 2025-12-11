@@ -5,7 +5,9 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Icon } from "@iconify/react";
 import Image from "next/image";
 import { Game, GameStatus, getGames } from "@/lib/api/games";
-import { showErrorToast } from "@/lib/toast";
+import { showErrorToast, showSuccessToast } from "@/lib/toast";
+import { moderateContent } from "@/lib/api/moderate";
+import { ApiClientError } from "@/lib/api/client";
 
 type FilterStatus = "All" | GameStatus;
 
@@ -18,6 +20,8 @@ export default function GamesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [approvingGameId, setApprovingGameId] = useState<number | null>(null);
+  const [rejectingGameId, setRejectingGameId] = useState<number | null>(null);
   const pageSize = 10;
 
   const statusOptions: FilterStatus[] = [
@@ -29,21 +33,65 @@ export default function GamesPage() {
     "DRAFT",
   ];
 
-  useEffect(() => {
-    const fetchGames = async () => {
-      try {
-        setIsLoading(true);
-        const data = await getGames();
-        setGames(data);
-      } catch (error: any) {
-        showErrorToast(error.message || "Failed to load games. Please try again.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const fetchGames = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getGames();
+      setGames(data);
+    } catch (error: any) {
+      showErrorToast(error.message || "Failed to load games. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchGames();
   }, []);
+
+  const handleApproveGame = async (gameId: number) => {
+    try {
+      setApprovingGameId(gameId);
+      await moderateContent({
+        model: "game",
+        id: gameId,
+        action: "approve",
+      });
+      showSuccessToast("Game approved successfully!");
+      fetchGames();
+    } catch (error) {
+      console.error("Error approving game:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to approve game");
+      } else {
+        showErrorToast("An unexpected error occurred");
+      }
+    } finally {
+      setApprovingGameId(null);
+    }
+  };
+
+  const handleRejectGame = async (gameId: number) => {
+    try {
+      setRejectingGameId(gameId);
+      await moderateContent({
+        model: "game",
+        id: gameId,
+        action: "reject",
+      });
+      showSuccessToast("Game rejected successfully!");
+      fetchGames();
+    } catch (error) {
+      console.error("Error rejecting game:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to reject game");
+      } else {
+        showErrorToast("An unexpected error occurred");
+      }
+    } finally {
+      setRejectingGameId(null);
+    }
+  };
 
   const types = useMemo(() => {
     const uniqueTypes = Array.from(new Set(games.map((g) => g.type))).sort();
@@ -267,13 +315,53 @@ export default function GamesPage() {
                             {formatDate(game.created_at)}
                           </td>
                           <td className="px-4 sm:px-6 py-4 text-right">
-                            <button
-                              onClick={() => handleViewClick(game)}
-                              className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                            >
-                              <Icon icon="solar:eye-bold" className="w-4 h-4" />
-                              View
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              {game.status === "PENDING" && (
+                                <>
+                                  <button
+                                    onClick={() => handleApproveGame(game.id)}
+                                    disabled={approvingGameId === game.id || rejectingGameId === game.id}
+                                    className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {approvingGameId === game.id ? (
+                                      <>
+                                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                                        Approving...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
+                                        Approve
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectGame(game.id)}
+                                    disabled={approvingGameId === game.id || rejectingGameId === game.id}
+                                    className="inline-flex items-center gap-2 rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {rejectingGameId === game.id ? (
+                                      <>
+                                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                                        Rejecting...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
+                                        Reject
+                                      </>
+                                    )}
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                onClick={() => handleViewClick(game)}
+                                className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                              >
+                                <Icon icon="solar:eye-bold" className="w-4 h-4" />
+                                View
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -370,6 +458,10 @@ export default function GamesPage() {
         <GameViewModal
           game={selectedGame}
           onClose={closeViewModal}
+          onApprove={handleApproveGame}
+          onReject={handleRejectGame}
+          isApproving={approvingGameId === selectedGame.id}
+          isRejecting={rejectingGameId === selectedGame.id}
         />
       )}
     </DashboardLayout>
@@ -379,9 +471,17 @@ export default function GamesPage() {
 function GameViewModal({
   game,
   onClose,
+  onApprove,
+  onReject,
+  isApproving,
+  isRejecting,
 }: {
   game: Game;
   onClose: () => void;
+  onApprove?: (id: number) => void;
+  onReject?: (id: number) => void;
+  isApproving?: boolean;
+  isRejecting?: boolean;
 }) {
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -538,6 +638,44 @@ function GameViewModal({
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+              {game.status === "PENDING" && onApprove && onReject && (
+                <>
+                  <button
+                    onClick={() => onApprove(game.id)}
+                    disabled={isApproving || isRejecting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isApproving ? (
+                      <>
+                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                        Approving...
+                      </>
+                    ) : (
+                      <>
+                        <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
+                        Approve
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => onReject(game.id)}
+                    disabled={isApproving || isRejecting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isRejecting ? (
+                      <>
+                        <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                        Rejecting...
+                      </>
+                    ) : (
+                      <>
+                        <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
+                        Reject
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
               <button
                 onClick={onClose}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"

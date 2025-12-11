@@ -4,11 +4,14 @@ import React, { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Icon } from "@iconify/react";
 import Image from "next/image";
-import { getTeachers, TeacherRecord, TeacherStatus } from "@/lib/api/teachers";
-import { showErrorToast } from "@/lib/toast";
+import { getTeachers, TeacherRecord, TeacherStatus, approveAdminTeacher, rejectAdminTeacher } from "@/lib/api/teachers";
+import { showErrorToast, showSuccessToast } from "@/lib/toast";
+import { ApiClientError } from "@/lib/api/client";
+import AddUserModal from "@/components/users/AddUserModal";
 
 type Teacher = {
   id: string;
+  apiId: number;
   name: string;
   email: string;
   subjects: string;
@@ -23,6 +26,7 @@ const districts = ["All", "District 1", "District 2", "District 3", "District 4"
 function mapTeachers(records: TeacherRecord[]): Teacher[] {
   return records.map((record) => ({
     id: String(record.id),
+    apiId: record.id,
     name: record.profile?.name || "Unknown",
     email: record.profile?.email || "Unknown",
     subjects: "-",
@@ -46,25 +50,90 @@ export default function TeachersPage() {
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [actionButtonRef, setActionButtonRef] = useState<HTMLButtonElement | null>(null);
+  const [approvingTeacherId, setApprovingTeacherId] = useState<string | null>(null);
+  const [rejectingTeacherId, setRejectingTeacherId] = useState<string | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [teacherToReject, setTeacherToReject] = useState<Teacher | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedTeacherForDetails, setSelectedTeacherForDetails] = useState<Teacher | null>(null);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [addUserTab, setAddUserTab] = useState<"single" | "bulk">("single");
   const pageSize = 10;
 
-  useEffect(() => {
-    const fetchTeachers = async () => {
-      try {
-        setIsLoading(true);
-        const data = await getTeachers();
-        setTeachers(mapTeachers(data));
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to load teachers";
-        showErrorToast(message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const fetchTeachers = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getTeachers();
+      setTeachers(mapTeachers(data));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load teachers";
+      showErrorToast(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchTeachers();
   }, []);
+
+  const handleApproveTeacher = async (teacher: Teacher) => {
+    if (!teacher.apiId) {
+      showErrorToast(`Cannot approve teacher: Missing teacher ID for ${teacher.name}`);
+      return;
+    }
+
+    try {
+      setApprovingTeacherId(teacher.id);
+      await approveAdminTeacher(teacher.apiId);
+      showSuccessToast(`${teacher.name} has been approved successfully!`);
+      await fetchTeachers(); // Refresh the list
+    } catch (error) {
+      console.error("Error approving teacher:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to approve teacher");
+      } else {
+        showErrorToast("An unexpected error occurred while approving teacher");
+      }
+    } finally {
+      setApprovingTeacherId(null);
+      closeModal();
+    }
+  };
+
+  const handleRejectClick = (teacher: Teacher) => {
+    setTeacherToReject(teacher);
+    setShowRejectModal(true);
+    closeModal();
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!teacherToReject || !teacherToReject.apiId) {
+      showErrorToast(`Cannot reject teacher: Missing teacher ID for ${teacherToReject?.name || 'unknown'}`);
+      setShowRejectModal(false);
+      setTeacherToReject(null);
+      return;
+    }
+
+    try {
+      setRejectingTeacherId(teacherToReject.id);
+      await rejectAdminTeacher(teacherToReject.apiId);
+      showSuccessToast(`${teacherToReject.name} has been rejected.`);
+      await fetchTeachers(); // Refresh the list
+      setShowRejectModal(false);
+      setTeacherToReject(null);
+    } catch (error) {
+      console.error("Error rejecting teacher:", error);
+      if (error instanceof ApiClientError) {
+        showErrorToast(error.message || "Failed to reject teacher");
+      } else {
+        showErrorToast("An unexpected error occurred while rejecting teacher");
+      }
+    } finally {
+      setRejectingTeacherId(null);
+    }
+  };
 
   const filteredTeachers = useMemo(() => {
     return teachers.filter((teacher) => {
@@ -136,6 +205,10 @@ export default function TeachersPage() {
     }
   };
 
+  const getStatusDisplay = (status: TeacherStatus): string => {
+    return status;
+  };
+
   const getInitials = (name: string) => {
     const parts = name.split(" ");
     if (parts.length >= 2) {
@@ -145,7 +218,10 @@ export default function TeachersPage() {
   };
 
   return (
-    <DashboardLayout onAddTeacher={() => console.log("Add Teacher")}>
+    <DashboardLayout onAddTeacher={() => {
+      setAddUserTab("single");
+      setShowAddUserModal(true);
+    }}>
       <div className="space-y-6">
         <div className="flex items-center justify-between flex-col sm:flex-row gap-4">
           <div>
@@ -153,7 +229,10 @@ export default function TeachersPage() {
             <p className="text-gray-600 mt-1">Manage all teachers</p>
           </div>
           <button
-            onClick={() => {}}
+            onClick={() => {
+              setAddUserTab("single");
+              setShowAddUserModal(true);
+            }}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white shadow hover:bg-emerald-700 transition-colors sm:hidden"
           >
             <svg
@@ -169,7 +248,7 @@ export default function TeachersPage() {
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            Add Teacher
+            Add New Teacher
           </button>
         </div>
 
@@ -371,9 +450,206 @@ export default function TeachersPage() {
       </div>
 
       {isModalOpen && selectedTeacher && actionButtonRef && (
-        <TeacherActionDropdown teacher={selectedTeacher} onClose={closeModal} buttonRef={actionButtonRef} />
+        <TeacherActionDropdown
+          teacher={selectedTeacher}
+          onClose={closeModal}
+          buttonRef={actionButtonRef}
+          onApprove={handleApproveTeacher}
+          onReject={handleRejectClick}
+          onViewDetails={(teacher) => {
+            setSelectedTeacherForDetails(teacher);
+            setShowDetailsModal(true);
+            closeModal();
+          }}
+          isApproving={approvingTeacherId === selectedTeacher.id}
+          isRejecting={rejectingTeacherId === selectedTeacher.id}
+        />
+      )}
+
+      {showAddUserModal && (
+        <AddUserModal
+          userType="Teacher"
+          activeTab={addUserTab}
+          onTabChange={setAddUserTab}
+          onClose={() => {
+            setShowAddUserModal(false);
+            setAddUserTab("single");
+          }}
+          onSuccess={() => {
+            fetchTeachers();
+          }}
+        />
+      )}
+
+      {showDetailsModal && selectedTeacherForDetails && (
+        <TeacherDetailsModal
+          teacher={selectedTeacherForDetails}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedTeacherForDetails(null);
+          }}
+        />
+      )}
+
+      {showRejectModal && teacherToReject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => {
+            setShowRejectModal(false);
+            setTeacherToReject(null);
+          }} />
+          <div className="relative z-50 bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <Icon icon="solar:danger-triangle-bold" className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Reject Teacher</h3>
+                <p className="text-sm text-gray-600 mt-1">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-gray-700 mb-6">
+              Are you sure you want to reject <span className="font-semibold">{teacherToReject.name}</span>? 
+              This will mark the teacher as rejected and they will not be able to access the platform.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setTeacherToReject(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRejectConfirm}
+                disabled={rejectingTeacherId === teacherToReject.id}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {rejectingTeacherId === teacherToReject.id ? (
+                  <>
+                    <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                    Rejecting...
+                  </>
+                ) : (
+                  <>
+                    <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
+                    Reject Teacher
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </DashboardLayout>
+  );
+}
+
+function TeacherDetailsModal({
+  teacher,
+  onClose,
+}: {
+  teacher: Teacher;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="bg-black/50 backdrop-blur-sm fixed inset-0" onClick={onClose} />
+      <div className="relative z-50 bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-gray-200" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Teacher Details</h2>
+              <p className="text-sm text-gray-600 mt-1">Complete information about {teacher.name}</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <Icon icon="solar:close-circle-bold" className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Profile Section */}
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 bg-blue-200 rounded-full flex items-center justify-center">
+                <Icon icon="solar:user-bold" className="w-10 h-10 text-blue-700" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-gray-900">{teacher.name}</h3>
+                <p className="text-sm text-gray-600 mt-1">{teacher.email}</p>
+                <div className="mt-2">
+                  <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
+                    teacher.status === "APPROVED"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : teacher.status === "PENDING"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : teacher.status === "REJECTED"
+                      ? "bg-red-100 text-red-800"
+                      : "bg-gray-100 text-gray-800"
+                  }`}>
+                    {teacher.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Teacher Information */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Icon icon="solar:user-id-bold" className="w-5 h-5 text-blue-600" />
+              Teacher Information
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Teacher ID</p>
+                <p className="text-sm font-semibold text-gray-900">#{teacher.apiId || teacher.id}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Email Address</p>
+                <p className="text-sm font-semibold text-gray-900">{teacher.email}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Subjects</p>
+                <p className="text-sm font-semibold text-gray-900">{teacher.subjects}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Date Joined</p>
+                <p className="text-sm font-semibold text-gray-900">{teacher.dateJoined}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs font-medium text-gray-600 mb-1">Status</p>
+                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                  teacher.status === "APPROVED"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : teacher.status === "PENDING"
+                    ? "bg-yellow-100 text-yellow-800"
+                    : teacher.status === "REJECTED"
+                    ? "bg-red-100 text-red-800"
+                    : "bg-gray-100 text-gray-800"
+                }`}>
+                  {teacher.status}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -381,10 +657,20 @@ function TeacherActionDropdown({
   teacher,
   onClose,
   buttonRef,
+  onApprove,
+  onReject,
+  onViewDetails,
+  isApproving,
+  isRejecting,
 }: {
   teacher: Teacher;
   onClose: () => void;
   buttonRef: HTMLButtonElement;
+  onApprove: (teacher: Teacher) => void;
+  onReject: (teacher: Teacher) => void;
+  onViewDetails: (teacher: Teacher) => void;
+  isApproving: boolean;
+  isRejecting: boolean;
 }) {
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
@@ -426,33 +712,60 @@ function TeacherActionDropdown({
           <p className="text-xs text-gray-500 truncate">{teacher.email}</p>
         </div>
         <div className="py-1">
+          {teacher.status === "PENDING" && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onApprove(teacher);
+                }}
+                disabled={isApproving || isRejecting}
+                className="w-full text-left px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50 flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isApproving ? (
+                  <>
+                    <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin text-emerald-600" />
+                    <span>Approving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon icon="solar:check-circle-bold" className="w-4 h-4 text-emerald-600" />
+                    <span>Approve Teacher</span>
+                  </>
+                )}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReject(teacher);
+                }}
+                disabled={isApproving || isRejecting}
+                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isRejecting ? (
+                  <>
+                    <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin text-red-600" />
+                    <span>Rejecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon icon="solar:close-circle-bold" className="w-4 h-4 text-red-600" />
+                    <span>Reject Teacher</span>
+                  </>
+                )}
+              </button>
+              <div className="border-t border-gray-200 my-1"></div>
+            </>
+          )}
           <button
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewDetails(teacher);
+            }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
           >
             <Icon icon="solar:eye-bold" className="w-4 h-4 text-gray-600" />
             <span>View Details</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-          >
-            <Icon icon="solar:pen-bold" className="w-4 h-4 text-gray-600" />
-            <span>Edit Teacher</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-          >
-            <Icon icon="solar:lock-password-bold" className="w-4 h-4 text-gray-600" />
-            <span>Reset Password</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
-          >
-            <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
-            <span>Delete Teacher</span>
           </button>
         </div>
       </div>
