@@ -63,16 +63,19 @@ export async function updateCounty(
 }
 
 export async function downloadCountyBulkTemplate(): Promise<Blob> {
-  // Mirrors the pattern used in students/teachers/content-managers bulk template downloads
-  const response = await apiRequest<Response>('/admin/counties/bulk-template/', {
-    method: 'GET',
-  } as any);
-
-  if (!(response instanceof Response)) {
-    // Fallback: when apiRequest is configured to return the raw body instead of Response
-    // we throw a clear error since counties bulk template should return a file.
-    throw new Error('Unexpected response type when downloading county bulk template.');
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (!API_BASE_URL) {
+    throw new Error('API base URL is not configured');
   }
+
+  const response = await fetch(`${API_BASE_URL}/admin/counties/bulk-template/`, {
+    method: 'GET',
+    headers: {
+      ...(typeof window !== 'undefined' && localStorage.getItem('auth_token') && {
+        Authorization: `Token ${localStorage.getItem('auth_token')}`,
+      }),
+    },
+  });
 
   if (!response.ok) {
     throw new Error('Failed to download county bulk template.');
