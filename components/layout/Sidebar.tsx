@@ -48,29 +48,29 @@ export default function Sidebar({ mobileOpen = false, onClose, userName = "Admin
         <nav className="flex h-full flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto pt-24 pb-4">
             <ul className="px-3 py-2 space-y-[15px]">
-              {navItems.map((item) => {
-                const active = isActivePath(pathname, item.href);
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={
-                        "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors " +
-                        (active
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900")
-                      }
-                    >
-                      <Icon icon={item.icon} className="w-6 h-6" />
-                      <span className="text-lg font-medium">{item.label}</span>
-                      {active ? (
-                        <span className="absolute right-0 top-0 h-full w-1.5 rounded-l bg-emerald-500" />
-                      ) : null}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            {navItems.map((item) => {
+              const active = isActivePath(pathname, item.href);
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className={
+                      "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors " +
+                      (active
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900")
+                    }
+                  >
+                    <Icon icon={item.icon} className="w-6 h-6" />
+                    <span className="text-lg font-medium">{item.label}</span>
+                    {active ? (
+                      <span className="absolute right-0 top-0 h-full w-1.5 rounded-l bg-emerald-500" />
+                    ) : null}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
           </div>
 
           <div className="mt-auto p-3 space-y-3 flex-shrink-0 border-t border-gray-100 bg-white">
@@ -107,30 +107,30 @@ export default function Sidebar({ mobileOpen = false, onClose, userName = "Admin
             <nav className="flex h-full flex-col">
               <div className="flex-1 overflow-y-auto pt-6 pb-4">
                 <ul className="px-3 py-2 space-y-[15px]">
-                  {navItems.map((item) => {
-                    const active = isActivePath(pathname, item.href);
-                    return (
-                      <li key={item.href}>
-                        <Link
-                          href={item.href}
-                          onClick={onClose}
-                          className={
-                            "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors " +
-                            (active
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900")
-                          }
-                        >
-                          <Icon icon={item.icon} className="w-6 h-6" />
-                          <span className="text-lg font-medium">{item.label}</span>
-                          {active ? (
-                            <span className="absolute right-0 top-0 h-full w-1.5 rounded-l bg-emerald-500" />
-                          ) : null}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
+                {navItems.map((item) => {
+                  const active = isActivePath(pathname, item.href);
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={onClose}
+                        className={
+                          "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors " +
+                          (active
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900")
+                        }
+                      >
+                        <Icon icon={item.icon} className="w-6 h-6" />
+                        <span className="text-lg font-medium">{item.label}</span>
+                        {active ? (
+                          <span className="absolute right-0 top-0 h-full w-1.5 rounded-l bg-emerald-500" />
+                        ) : null}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
               </div>
               <div className="mt-auto p-3 space-y-3 flex-shrink-0 border-t border-gray-100 bg-white">
                 <Link

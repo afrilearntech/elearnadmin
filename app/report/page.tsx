@@ -21,7 +21,7 @@ export default function ReportPage() {
   // Fetch reports when filters change (only if both are selected)
   useEffect(() => {
     if (selectedMonth > 0 && selectedYear > 0) {
-      fetchReports();
+    fetchReports();
     }
   }, [selectedMonth, selectedYear]);
 

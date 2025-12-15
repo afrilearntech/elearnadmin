@@ -550,7 +550,7 @@ export default function StudentsPage() {
                 <h3 className="text-xl font-bold text-gray-900">Reject Student</h3>
                 <p className="text-sm text-gray-600 mt-1">This action cannot be undone</p>
               </div>
-            </div>
+                  </div>
             <p className="text-gray-700 mb-6">
               Are you sure you want to reject <span className="font-semibold">{studentToReject.name}</span>? 
               This will mark the student as rejected and they will not be able to access the platform.
@@ -582,10 +582,10 @@ export default function StudentsPage() {
                   </>
                 )}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
+                    </div>
+                  </div>
+                </div>
+              )}
     </DashboardLayout>
   );
 }
@@ -603,18 +603,18 @@ function StudentDetailsModal({
       <div className="relative z-50 bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-gray-200" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
           <div className="flex items-center justify-between">
-            <div>
+                  <div>
               <h2 className="text-2xl font-bold text-gray-900">Student Details</h2>
               <p className="text-sm text-gray-600 mt-1">Complete information about {student.name}</p>
-            </div>
-            <button
+                  </div>
+                      <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
+                      >
               <Icon icon="solar:close-circle-bold" className="w-6 h-6" />
-            </button>
-          </div>
-        </div>
+                      </button>
+                    </div>
+                  </div>
 
         <div className="p-6 space-y-6">
           {/* Profile Section */}
@@ -635,11 +635,11 @@ function StudentDetailsModal({
                       : "bg-red-100 text-red-800"
                   }`}>
                     {student.status}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+                        </span>
+                            </div>
+                          </div>
+                          </div>
+                        </div>
 
           {/* Student Information */}
           <div>
@@ -659,15 +659,15 @@ function StudentDetailsModal({
               <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                 <p className="text-xs font-medium text-gray-600 mb-1">School</p>
                 <p className="text-sm font-semibold text-gray-900">{student.school}</p>
-              </div>
+                    </div>
               <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                 <p className="text-xs font-medium text-gray-600 mb-1">Grade Level</p>
                 <p className="text-sm font-semibold text-gray-900">{student.gradeLevel}</p>
-              </div>
+                  </div>
               <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                 <p className="text-xs font-medium text-gray-600 mb-1">Linked Parents</p>
                 <p className="text-sm font-semibold text-gray-900">{student.linkedParent}</p>
-              </div>
+                </div>
               <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                 <p className="text-xs font-medium text-gray-600 mb-1">Status</p>
                 <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${

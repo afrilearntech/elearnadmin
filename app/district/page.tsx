@@ -1,15 +1,34 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Icon } from "@iconify/react";
-import { getDistricts, District, updateDistrict, createDistrict } from "@/lib/api/districts";
+import {
+  getDistricts,
+  District,
+  updateDistrict,
+  createDistrict,
+  downloadDistrictBulkTemplate,
+  bulkCreateDistricts,
+  BulkUploadDistrictResponse,
+} from "@/lib/api/districts";
 import { getCounties, County } from "@/lib/api/counties";
 import { showErrorToast, showSuccessToast } from "@/lib/toast";
 
-type DistrictStatus = "APPROVED" | "PENDING" | "REJECTED" | "REVIEW_REQUESTED" | "DRAFT";
+ type DistrictStatus =
+  | "APPROVED"
+  | "PENDING"
+  | "REJECTED"
+  | "REVIEW_REQUESTED"
+  | "DRAFT";
 
-const statusOptions = ["All", "APPROVED", "PENDING", "REJECTED", "REVIEW_REQUESTED"];
+const statusOptions = [
+  "All",
+  "APPROVED",
+  "PENDING",
+  "REJECTED",
+  "REVIEW_REQUESTED",
+];
 
 export default function DistrictPage() {
   const [search, setSearch] = useState("");
@@ -20,6 +39,7 @@ export default function DistrictPage() {
   const [districts, setDistricts] = useState<District[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createFormData, setCreateFormData] = useState({
     county: "",
@@ -33,11 +53,15 @@ export default function DistrictPage() {
   const pageSize = 10;
 
   useEffect(() => {
-    const fetchDistricts = async () => {
+    const fetchAll = async () => {
       try {
         setIsLoading(true);
-        const data = await getDistricts();
-        setDistricts(data);
+        const [districtData, countyData] = await Promise.all([
+          getDistricts(),
+          getCounties(),
+        ]);
+        setDistricts(districtData);
+        setCounties(countyData);
       } catch (error) {
         showErrorToast("Failed to load districts. Please try again.");
         console.error("Error fetching districts:", error);
@@ -46,17 +70,7 @@ export default function DistrictPage() {
       }
     };
 
-    const fetchCounties = async () => {
-      try {
-        const data = await getCounties();
-        setCounties(data);
-      } catch (error) {
-        console.error("Error fetching counties:", error);
-      }
-    };
-
-    fetchDistricts();
-    fetchCounties();
+    fetchAll();
   }, []);
 
   const filteredDistricts = useMemo(() => {
@@ -64,7 +78,8 @@ export default function DistrictPage() {
       const matchesSearch =
         search.trim().length === 0 ||
         district.name.toLowerCase().includes(search.toLowerCase());
-      const matchesStatus = selectedStatus === "All" || district.status === selectedStatus;
+      const matchesStatus =
+        selectedStatus === "All" || district.status === selectedStatus;
       return matchesSearch && matchesStatus;
     });
   }, [search, selectedStatus, districts]);
@@ -141,7 +156,9 @@ export default function DistrictPage() {
       setIsCreateModalOpen(false);
       setCreateFormData({ county: "", name: "" });
     } catch (error: any) {
-      showErrorToast(error.message || "Failed to create district. Please try again.");
+      showErrorToast(
+        error?.message || "Failed to create district. Please try again."
+      );
     } finally {
       setIsCreating(false);
     }
@@ -155,13 +172,22 @@ export default function DistrictPage() {
             <h1 className="text-2xl font-bold text-gray-900">District Management</h1>
             <p className="text-gray-600 mt-1">Manage all districts</p>
           </div>
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white shadow hover:bg-emerald-700 transition-colors sm:hidden"
-          >
-            <Icon icon="solar:add-circle-bold" className="w-5 h-5" />
-            Add District
-          </button>
+          <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white shadow hover:bg-emerald-700 transition-colors"
+            >
+              <Icon icon="solar:add-circle-bold" className="w-5 h-5" />
+              Add District
+            </button>
+            <button
+              onClick={() => setIsBulkModalOpen(true)}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full border border-emerald-200 px-5 py-2.5 text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 transition-colors"
+            >
+              <Icon icon="solar:upload-bold" className="w-5 h-5" />
+              Bulk Upload Districts
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
@@ -209,9 +235,14 @@ export default function DistrictPage() {
             </div>
           ) : filteredDistricts.length === 0 ? (
             <div className="text-center py-12">
-              <Icon icon="solar:buildings-bold" className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <Icon
+                icon="solar:buildings-bold"
+                className="w-12 h-12 text-gray-400 mx-auto mb-3"
+              />
               <p className="text-gray-500 text-sm">No districts found</p>
-              <p className="text-gray-400 text-xs mt-1">Try adjusting your search or filters</p>
+              <p className="text-gray-400 text-xs mt-1">
+                Try adjusting your search or filters
+              </p>
             </div>
           ) : (
             <>
@@ -220,26 +251,49 @@ export default function DistrictPage() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead>
                       <tr className="bg-emerald-50">
-                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider">Name</th>
-                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider hidden md:table-cell">County ID</th>
-                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider">Status</th>
-                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider hidden lg:table-cell">Created At</th>
-                        <th className="px-4 sm:px-6 py-3 text-right text-xs font-semibold text-gray-900 uppercase tracking-wider">Actions</th>
+                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider">
+                          Name
+                        </th>
+                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider hidden md:table-cell">
+                          County ID
+                        </th>
+                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider hidden lg:table-cell">
+                          Created At
+                        </th>
+                        <th className="px-4 sm:px-6 py-3 text-right text-xs font-semibold text-gray-900 uppercase tracking-wider">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {pagedDistricts.map((district) => (
-                        <tr key={district.id} className="hover:bg-gray-50 transition-colors">
+                        <tr
+                          key={district.id}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
                           <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{district.name}</div>
-                            <div className="text-xs text-gray-500 md:hidden">County {district.county}</div>
-                            <div className="text-xs text-gray-500 lg:hidden">{formatDate(district.created_at)}</div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {district.name}
+                            </div>
+                            <div className="text-xs text-gray-500 md:hidden">
+                              County {district.county}
+                            </div>
+                            <div className="text-xs text-gray-500 lg:hidden">
+                              {formatDate(district.created_at)}
+                            </div>
                           </td>
                           <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600 hidden md:table-cell">
                             County {district.county}
                           </td>
                           <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(district.status)}`}>
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(
+                                district.status as DistrictStatus
+                              )}`}
+                            >
                               {district.status}
                             </span>
                           </td>
@@ -265,7 +319,9 @@ export default function DistrictPage() {
               {totalPages > 1 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-gray-200">
                   <div className="text-sm text-gray-600 order-2 sm:order-1">
-                    Showing <span className="font-medium">{start + 1}</span> to <span className="font-medium">{Math.min(start + pageSize, filteredDistricts.length)}</span> of <span className="font-medium">{filteredDistricts.length}</span> districts
+                    Showing <span className="font-medium">{start + 1}</span> to
+                    <span className="font-medium"> {Math.min(start + pageSize, filteredDistricts.length)}</span>{" "}
+                    of <span className="font-medium">{filteredDistricts.length}</span> districts
                   </div>
                   <div className="flex items-center gap-2 order-1 sm:order-2">
                     <button
@@ -338,14 +394,9 @@ export default function DistrictPage() {
         <DistrictViewModal
           district={selectedDistrict}
           onClose={closeViewModal}
-          onUpdate={(updatedDistrict) => {
-            setDistricts((prev) =>
-              prev.map((d) => (d.id === updatedDistrict.id ? updatedDistrict : d))
-            );
-            setSelectedDistrict(updatedDistrict);
-          }}
         />
       )}
+
       {isCreateModalOpen && (
         <CreateDistrictModal
           onClose={() => {
@@ -361,6 +412,17 @@ export default function DistrictPage() {
           counties={counties}
         />
       )}
+
+      {isBulkModalOpen && (
+        <BulkUploadDistrictsModal
+          onClose={() => setIsBulkModalOpen(false)}
+          onSuccess={(result) => {
+            showSuccessToast(
+              `Bulk upload completed: ${result.summary.created} created, ${result.summary.failed} failed.`,
+            );
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }
@@ -368,17 +430,10 @@ export default function DistrictPage() {
 function DistrictViewModal({
   district,
   onClose,
-  onUpdate,
 }: {
   district: District;
   onClose: () => void;
-  onUpdate: (district: District) => void;
 }) {
-  const [showRequestChangesModal, setShowRequestChangesModal] = useState(false);
-  const [moderationComment, setModerationComment] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [actionType, setActionType] = useState<"APPROVE" | "REJECT" | "REVIEW_REQUESTED" | null>(null);
-
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -406,78 +461,6 @@ function DistrictViewModal({
     return "bg-gray-100 text-gray-600";
   };
 
-  const handleApprove = async () => {
-    try {
-      setIsSubmitting(true);
-      setActionType("APPROVE");
-      const updatedDistrict = await updateDistrict(district.id, {
-        status: "APPROVED",
-        county: district.county,
-        name: district.name,
-      });
-      onUpdate(updatedDistrict);
-      showSuccessToast("District approved successfully!");
-      onClose();
-    } catch (error: any) {
-      showErrorToast(error.message || "Failed to approve district. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-      setActionType(null);
-    }
-  };
-
-  const handleReject = async () => {
-    try {
-      setIsSubmitting(true);
-      setActionType("REJECT");
-      const updatedDistrict = await updateDistrict(district.id, {
-        status: "REJECTED",
-        county: district.county,
-        name: district.name,
-      });
-      onUpdate(updatedDistrict);
-      showSuccessToast("District rejected successfully!");
-      onClose();
-    } catch (error: any) {
-      showErrorToast(error.message || "Failed to reject district. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-      setActionType(null);
-    }
-  };
-
-  const handleRequestReview = () => {
-    setShowRequestChangesModal(true);
-  };
-
-  const handleSubmitRequestReview = async () => {
-    if (!moderationComment.trim()) {
-      showErrorToast("Please provide a moderation comment.");
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setActionType("REVIEW_REQUESTED");
-      const updatedDistrict = await updateDistrict(district.id, {
-        status: "REVIEW_REQUESTED",
-        county: district.county,
-        name: district.name,
-        moderation_comment: moderationComment.trim(),
-      });
-      onUpdate(updatedDistrict);
-      showSuccessToast("Request for changes submitted successfully!");
-      setShowRequestChangesModal(false);
-      setModerationComment("");
-      onClose();
-    } catch (error: any) {
-      showErrorToast(error.message || "Failed to request changes. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-      setActionType(null);
-    }
-  };
-
   return (
     <>
       <div
@@ -485,7 +468,10 @@ function DistrictViewModal({
         onClick={onClose}
       />
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
-        <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto pointer-events-auto border border-gray-200" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto pointer-events-auto border border-gray-200"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
             <h2 className="text-xl font-bold text-gray-900">District Details</h2>
             <button
@@ -512,7 +498,11 @@ function DistrictViewModal({
               <div>
                 <label className="text-sm font-medium text-gray-500">Status</label>
                 <div className="mt-1">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusBadge(district.status)}`}>
+                  <span
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusBadge(
+                      district.status as DistrictStatus,
+                    )}`}
+                  >
                     {district.status}
                   </span>
                 </div>
@@ -541,68 +531,14 @@ function DistrictViewModal({
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
               <button
                 onClick={onClose}
-                disabled={isSubmitting}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Close
               </button>
-              {district.status === "PENDING" && (
-                <>
-                  <button
-                    onClick={handleApprove}
-                    disabled={isSubmitting}
-                    className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {isSubmitting && actionType === "APPROVE" ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Approving...
-                      </>
-                    ) : (
-                      "Approve"
-                    )}
-                  </button>
-                  <button
-                    onClick={handleReject}
-                    disabled={isSubmitting}
-                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {isSubmitting && actionType === "REJECT" ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Rejecting...
-                      </>
-                    ) : (
-                      "Reject"
-                    )}
-                  </button>
-                  <button
-                    onClick={handleRequestReview}
-                    disabled={isSubmitting}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Request Review
-                  </button>
-                </>
-              )}
             </div>
           </div>
         </div>
       </div>
-
-      {showRequestChangesModal && (
-        <RequestChangesModal
-          districtName={district.name}
-          moderationComment={moderationComment}
-          setModerationComment={setModerationComment}
-          onSubmit={handleSubmitRequestReview}
-          onClose={() => {
-            setShowRequestChangesModal(false);
-            setModerationComment("");
-          }}
-          isSubmitting={isSubmitting && actionType === "REVIEW_REQUESTED"}
-        />
-      )}
     </>
   );
 }
@@ -624,8 +560,7 @@ function CreateDistrictModal({
   isSubmitting: boolean;
   counties: County[];
 }) {
-  const disabled =
-    isSubmitting || !formData.name.trim() || !formData.county;
+  const disabled = isSubmitting || !formData.name.trim() || !formData.county;
 
   return (
     <>
@@ -658,9 +593,7 @@ function CreateDistrictModal({
               <div className="relative">
                 <select
                   value={formData.county}
-                  onChange={(e) =>
-                    setFormData({ ...formData, county: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, county: e.target.value })}
                   className={`w-full px-4 py-3 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white appearance-none cursor-pointer ${
                     errors.county ? "border-red-500" : "border-gray-300"
                   }`}
@@ -689,9 +622,7 @@ function CreateDistrictModal({
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Enter district name"
                 className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white placeholder:text-gray-400 ${
                   errors.name ? "border-red-500" : "border-gray-300"
@@ -732,76 +663,428 @@ function CreateDistrictModal({
   );
 }
 
-
-function RequestChangesModal({
-  districtName,
-  moderationComment,
-  setModerationComment,
-  onSubmit,
+function BulkUploadDistrictsModal({
   onClose,
-  isSubmitting,
+  onSuccess,
 }: {
-  districtName: string;
-  moderationComment: string;
-  setModerationComment: (comment: string) => void;
-  onSubmit: () => void;
   onClose: () => void;
-  isSubmitting: boolean;
+  onSuccess: (result: BulkUploadDistrictResponse) => void;
 }) {
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadResult, setUploadResult] = useState<BulkUploadDistrictResponse | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleClose = () => {
+    setSelectedFile(null);
+    setUploadResult(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    onClose();
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      setIsDownloading(true);
+      const blob = await downloadDistrictBulkTemplate();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "districts_bulk_template.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      showSuccessToast("District bulk template downloaded successfully!");
+    } catch (error: any) {
+      const message = error?.message || "Failed to download district bulk template.";
+      showErrorToast(message);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleFileSelect = (file: File) => {
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      showErrorToast("Please select a CSV file.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showErrorToast("File size must be less than 10MB.");
+      return;
+    }
+    setSelectedFile(file);
+    setUploadResult(null);
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileSelect(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileSelect(e.target.files[0]);
+    }
+  };
+
+  const removeFile = () => {
+    setSelectedFile(null);
+    setUploadResult(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      showErrorToast("Please select a file to upload.");
+      return;
+    }
+    try {
+      setIsUploading(true);
+      const result = await bulkCreateDistricts(selectedFile);
+      setUploadResult(result);
+
+      if (result.summary.failed === 0) {
+        showSuccessToast(
+          `Successfully created ${result.summary.created} district(s)!`,
+        );
+        onSuccess(result);
+        setTimeout(() => handleClose(), 1500);
+      } else {
+        showErrorToast(
+          `Upload completed with errors. ${result.summary.created} created, ${result.summary.failed} failed.`,
+        );
+      }
+    } catch (error: any) {
+      const message = error?.message || "Failed to upload districts file.";
+      showErrorToast(message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <>
       <div
-        className="fixed inset-0 z-[65]"
-        onClick={onClose}
+        className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm"
+        onClick={handleClose}
       />
-      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
-        <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full pointer-events-auto border border-gray-200" onClick={(e) => e.stopPropagation()}>
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+        <div
+          className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto pointer-events-auto border border-gray-200"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="text-lg font-bold text-gray-900">Request Review</h3>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Bulk Upload Districts</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Upload a CSV file to quickly create multiple districts at once.
+              </p>
+            </div>
             <button
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+              onClick={handleClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
               aria-label="Close modal"
             >
               <Icon icon="solar:close-circle-bold" className="w-6 h-6" />
             </button>
           </div>
 
-          <div className="px-6 py-6 space-y-4">
-            <div>
-              <p className="text-sm text-gray-600 mb-2">
-                Please provide a comment explaining what changes are needed for <span className="font-semibold text-gray-900">{districtName}</span>:
-              </p>
-              <textarea
-                value={moderationComment}
-                onChange={(e) => setModerationComment(e.target.value)}
-                placeholder="Enter moderation comment..."
-                rows={5}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white placeholder:text-gray-400 resize-none"
-              />
+          <div className="p-6 space-y-6">
+            <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-5">
+              <div className="flex items-start gap-3">
+                <Icon
+                  icon="solar:info-circle-bold"
+                  className="w-6 h-6 text-emerald-700 flex-shrink-0 mt-0.5"
+                />
+                <div className="flex-1">
+                  <h4 className="text-base font-semibold text-emerald-900 mb-2">
+                    How district bulk upload works
+                  </h4>
+                  <ul className="space-y-2 text-sm text-emerald-900">
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 text-emerald-700">•</span>
+                      <span>
+                        <strong>Step 1:</strong> Download the official template so your CSV has
+                        the correct columns.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 text-emerald-700">•</span>
+                      <span>
+                        <strong>Step 2:</strong> Fill in one row per district (e.g. {
+                        " "}
+                        <code className="bg-emerald-100 px-1.5 py-0.5 rounded text-xs font-mono">
+                          Careysburg
+                        </code>
+                        , {
+                        " "}
+                        <code className="bg-emerald-100 px-1.5 py-0.5 rounded text-xs font-mono">
+                          Gbarnga
+                        </code>
+                        ) and make sure the county exists.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 text-emerald-700">•</span>
+                      <span>
+                        <strong>Step 3:</strong> Upload the CSV here. We will validate each
+                        row and show you which ones succeeded or failed.
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </div>
+
+            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-6 border border-emerald-200">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-emerald-200 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Icon
+                    icon="solar:document-download-bold"
+                    className="w-6 h-6 text-emerald-700"
+                  />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-1">
+                    Download districts CSV template
+                  </h4>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Use this template to prepare your district list. Do not rename or
+                    remove the header columns.
+                  </p>
+                  <button
+                    onClick={handleDownloadTemplate}
+                    disabled={isDownloading}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isDownloading ? (
+                      <>
+                        <Icon
+                          icon="solar:loading-bold"
+                          className="w-5 h-5 animate-spin"
+                        />
+                        Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <Icon
+                          icon="solar:download-bold"
+                          className="w-5 h-5"
+                        />
+                        Download Template
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-3">
+                Upload CSV file
+              </h4>
+
+              {!selectedFile ? (
+                <div
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                    dragActive
+                      ? "border-emerald-500 bg-emerald-50"
+                      : "border-gray-300 hover:border-emerald-400"
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileInputChange}
+                    className="hidden"
+                  />
+                  <Icon
+                    icon="solar:cloud-upload-bold"
+                    className="w-16 h-16 text-gray-400 mx-auto mb-4"
+                  />
+                  <p className="text-gray-700 mb-2">
+                    Drag and drop your CSV file here, or{" "}
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-emerald-600 hover:text-emerald-700 font-medium"
+                    >
+                      browse
+                    </button>
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    CSV files only, maximum 10MB.
+                  </p>
+                </div>
+              ) : (
+                <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Icon
+                          icon="solar:file-text-bold"
+                          className="w-5 h-5 text-emerald-600"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {selectedFile.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {(selectedFile.size / 1024).toFixed(2)} KB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeFile}
+                      className="text-gray-400 hover:text-red-600 transition-colors ml-4"
+                    >
+                      <Icon
+                        icon="solar:trash-bin-trash-bold"
+                        className="w-5 h-5"
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {uploadResult && (
+              <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                  Upload summary
+                </h4>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-900">
+                      {uploadResult.summary.total_rows}
+                    </p>
+                    <p className="text-xs text-gray-600">Total Rows</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-emerald-600">
+                      {uploadResult.summary.created}
+                    </p>
+                    <p className="text-xs text-gray-600">Created</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-red-600">
+                      {uploadResult.summary.failed}
+                    </p>
+                    <p className="text-xs text-gray-600">Failed</p>
+                  </div>
+                </div>
+
+                {uploadResult.summary.failed > 0 && (
+                  <div className="mt-4">
+                    <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                      <p className="text-sm font-semibold text-red-900 mb-2 flex items-center gap-2">
+                        <Icon
+                          icon="solar:danger-triangle-bold"
+                          className="w-5 h-5"
+                        />
+                        Failed rows ({uploadResult.summary.failed})
+                      </p>
+                      <p className="text-xs text-red-700">
+                        Review the errors below, fix them in your CSV, and try again for
+                        those rows.
+                      </p>
+                    </div>
+                    <div className="mt-3 max-h-64 overflow-y-auto space-y-3">
+                      {uploadResult.results
+                        .filter((r) => r.status === "error")
+                        .map((result, index) => (
+                          <div
+                            key={`${result.row ?? index}-error`}
+                            className="bg-red-50 border border-red-200 rounded-lg p-3"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="text-sm font-semibold text-red-900">
+                                Row {result.row ?? index + 1}
+                                {result.name && ` - ${result.name}`}
+                              </p>
+                              <span className="px-2 py-0.5 bg-red-200 text-red-900 text-xs font-medium rounded">
+                                ERROR
+                              </span>
+                            </div>
+                            {result.errors &&
+                              Object.keys(result.errors).length > 0 && (
+                                <ul className="mt-2 space-y-1 text-xs text-red-800">
+                                  {Object.entries(result.errors).map(
+                                    ([field, messages]) => (
+                                      <li key={field}>
+                                        <span className="font-semibold capitalize">
+                                          {field}:
+                                        </span>{" "}
+                                        {Array.isArray(messages)
+                                          ? messages.join(", ")
+                                          : messages}
+                                      </li>
+                                    ),
+                                  )}
+                                </ul>
+                              )}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
               <button
-                onClick={onClose}
-                disabled={isSubmitting}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                type="button"
+                onClick={handleClose}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={onSubmit}
-                disabled={isSubmitting || !moderationComment.trim()}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                type="button"
+                onClick={handleUpload}
+                disabled={!selectedFile || isUploading}
+                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
               >
-                {isSubmitting ? (
+                {isUploading ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Submitting...
+                    <Icon
+                      icon="solar:loading-bold"
+                      className="w-4 h-4 animate-spin"
+                    />
+                    Uploading...
                   </>
                 ) : (
-                  "Submit"
+                  <>
+                    <Icon icon="solar:upload-bold" className="w-4 h-4" />
+                    Upload & Process
+                  </>
                 )}
               </button>
             </div>
@@ -811,4 +1094,3 @@ function RequestChangesModal({
     </>
   );
 }
-

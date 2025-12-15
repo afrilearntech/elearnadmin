@@ -45,7 +45,7 @@ export default function LessonsChart({ data, granularity = "month" }: LessonsCha
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold text-gray-900">Lessons</h2>
         {granularity && (
-          <div className="flex gap-2">
+        <div className="flex gap-2">
             {(["Day", "Month", "Year"] as TimeFilter[]).map((filter) => {
               const isActive = 
                 (granularity === "day" && filter === "Day") ||
@@ -53,21 +53,21 @@ export default function LessonsChart({ data, granularity = "month" }: LessonsCha
                 (granularity === "year" && filter === "Year");
               
               return (
-                <button
-                  key={filter}
-                  onClick={() => setTimeFilter(filter)}
+            <button
+              key={filter}
+              onClick={() => setTimeFilter(filter)}
                   disabled={!isActive}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isActive
-                      ? "bg-[#059669] text-white"
+                  ? "bg-[#059669] text-white"
                       : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  }`}
-                >
-                  {filter}
-                </button>
+              }`}
+            >
+              {filter}
+            </button>
               );
             })}
-          </div>
+        </div>
         )}
       </div>
 
@@ -91,7 +91,7 @@ export default function LessonsChart({ data, granularity = "month" }: LessonsCha
           <p className="text-sm">No chart data available</p>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={400}>
+      <ResponsiveContainer width="100%" height={400}>
           <BarChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
           <XAxis
@@ -138,8 +138,8 @@ export default function LessonsChart({ data, granularity = "month" }: LessonsCha
             radius={[4, 4, 0, 0]}
             name="Rejected"
           />
-          </BarChart>
-        </ResponsiveContainer>
+        </BarChart>
+      </ResponsiveContainer>
       )}
     </div>
   );

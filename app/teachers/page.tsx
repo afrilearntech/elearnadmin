@@ -60,19 +60,19 @@ export default function TeachersPage() {
   const [addUserTab, setAddUserTab] = useState<"single" | "bulk">("single");
   const pageSize = 10;
 
-  const fetchTeachers = async () => {
-    try {
-      setIsLoading(true);
-      const data = await getTeachers();
-      setTeachers(mapTeachers(data));
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load teachers";
-      showErrorToast(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const fetchTeachers = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getTeachers();
+        setTeachers(mapTeachers(data));
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to load teachers";
+        showErrorToast(message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
   useEffect(() => {
     fetchTeachers();

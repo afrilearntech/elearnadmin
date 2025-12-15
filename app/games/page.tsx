@@ -33,17 +33,17 @@ export default function GamesPage() {
     "DRAFT",
   ];
 
-  const fetchGames = async () => {
-    try {
-      setIsLoading(true);
-      const data = await getGames();
-      setGames(data);
-    } catch (error: any) {
-      showErrorToast(error.message || "Failed to load games. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const fetchGames = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getGames();
+        setGames(data);
+      } catch (error: any) {
+        showErrorToast(error.message || "Failed to load games. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
   useEffect(() => {
     fetchGames();
@@ -354,13 +354,13 @@ export default function GamesPage() {
                                   </button>
                                 </>
                               )}
-                              <button
-                                onClick={() => handleViewClick(game)}
-                                className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                              >
-                                <Icon icon="solar:eye-bold" className="w-4 h-4" />
-                                View
-                              </button>
+                            <button
+                              onClick={() => handleViewClick(game)}
+                              className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                              <Icon icon="solar:eye-bold" className="w-4 h-4" />
+                              View
+                            </button>
                             </div>
                           </td>
                         </tr>

@@ -27,19 +27,19 @@ export default function HighLearners({ learners }: HighLearnersProps) {
           <p className="text-sm">No high learners data available</p>
         </div>
       ) : (
-        <div className="space-y-4">
+      <div className="space-y-4">
           {learners.map((learner) => (
             <div key={learner.student_id} className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#059669] to-[#1E40AF] flex items-center justify-center text-white font-semibold">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#059669] to-[#1E40AF] flex items-center justify-center text-white font-semibold">
                 {getInitials(learner.name)}
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-gray-900">{learner.name}</p>
-                <p className="text-sm text-gray-600">{learner.subtitle}</p>
-              </div>
             </div>
-          ))}
-        </div>
+            <div className="flex-1">
+              <p className="font-semibold text-gray-900">{learner.name}</p>
+                <p className="text-sm text-gray-600">{learner.subtitle}</p>
+            </div>
+          </div>
+        ))}
+      </div>
       )}
     </div>
   );

@@ -72,26 +72,26 @@ export default function DashboardPage() {
           change: Math.abs(dashboardData.summary_cards.parents.change_pct),
           changeType: getChangeType(dashboardData.summary_cards.parents.change_pct),
         },
-        {
-          title: "Total Content Creators",
+  {
+    title: "Total Content Creators",
           value: dashboardData.summary_cards.content_creators.count,
           change: Math.abs(dashboardData.summary_cards.content_creators.change_pct),
           changeType: getChangeType(dashboardData.summary_cards.content_creators.change_pct),
-        },
-        {
-          title: "Total Content Validators",
+  },
+  {
+    title: "Total Content Validators",
           value: dashboardData.summary_cards.content_validators.count,
           change: Math.abs(dashboardData.summary_cards.content_validators.change_pct),
           changeType: getChangeType(dashboardData.summary_cards.content_validators.change_pct),
-        },
-        {
-          title: "Approved Subjects",
+  },
+  {
+    title: "Approved Subjects",
           value: dashboardData.summary_cards.approved_subjects.count,
           change: Math.abs(dashboardData.summary_cards.approved_subjects.change_pct),
           changeType: getChangeType(dashboardData.summary_cards.approved_subjects.change_pct),
-        },
-        {
-          title: "Lessons Pending Approval",
+  },
+  {
+    title: "Lessons Pending Approval",
           value: dashboardData.summary_cards.lessons_pending_approval.count,
           change: Math.abs(dashboardData.summary_cards.lessons_pending_approval.change_pct),
           changeType: getChangeType(dashboardData.summary_cards.lessons_pending_approval.change_pct),
@@ -121,31 +121,31 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {metrics.map((metric, index) => (
-                <MetricCard
-                  key={index}
-                  title={metric.title}
-                  value={metric.value}
-                  change={metric.change}
-                  changeType={metric.changeType}
-                />
-              ))}
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {metrics.map((metric, index) => (
+            <MetricCard
+              key={index}
+              title={metric.title}
+              value={metric.value}
+              change={metric.change}
+              changeType={metric.changeType}
+            />
+          ))}
+        </div>
 
             {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <LessonsChart
                 data={dashboardData?.lessons_chart?.points || []}
                 granularity={dashboardData?.lessons_chart?.granularity || "month"}
               />
               <HighLearners learners={dashboardData?.high_learners || []} />
-            </div>
+        </div>
 
             {/* Recent Activity */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <RecentActivity />
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <RecentActivity />
+        </div>
           </>
         )}
       </div>
