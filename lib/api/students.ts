@@ -41,6 +41,14 @@ export interface CreateStudentRequest {
   grade: string;
   gender: string;
   dob: string;
+  /**
+   * Optional school context.
+   * - When called by a **teacher**, backend can infer school from the teacher context,
+   *   so this may be omitted.
+   * - When called by an **admin**, we should pass an explicit school_id so the same
+   *   endpoint can still assign the student to the correct school.
+   */
+  school_id?: number;
   status?: string;
 }
 
@@ -104,6 +112,9 @@ export async function createStudent(payload: CreateStudentRequest): Promise<Crea
     throw new ApiClientError('API base URL is not configured', 0);
   }
 
+  // Both admins and teachers use the same endpoint.
+  // - Teachers can rely on their own school context.
+  // - Admins must pass an explicit `school_id` in the payload.
   const url = `${API_BASE_URL}/teacher/students/create/`;
   const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
 

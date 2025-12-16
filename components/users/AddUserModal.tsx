@@ -61,7 +61,8 @@ export default function AddUserModal({ userType, activeTab, onTabChange, onClose
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (userType === "Teacher") {
+    // Admin needs schools for both Teacher and Student creation
+    if (userType === "Teacher" || userType === "Student") {
       fetchSchools();
     }
   }, [userType]);
@@ -130,6 +131,10 @@ export default function AddUserModal({ userType, activeTab, onTabChange, onClose
           showErrorToast("Please select a grade.");
           return;
         }
+        if (!formData.school_id) {
+          showErrorToast("Please select a school.");
+          return;
+        }
 
         const payload = {
           name: formData.name,
@@ -138,6 +143,7 @@ export default function AddUserModal({ userType, activeTab, onTabChange, onClose
           grade: formData.grade,
           gender: formData.gender,
           dob: formData.dob,
+          school_id: parseInt(formData.school_id),
           status: "APPROVED", // Automatically approve students created by admins
         };
 
@@ -436,7 +442,7 @@ export default function AddUserModal({ userType, activeTab, onTabChange, onClose
                   </div>
                 )}
 
-                {userType === "Teacher" && (
+                {(userType === "Teacher" || userType === "Student") && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       School <span className="text-red-500">*</span>
